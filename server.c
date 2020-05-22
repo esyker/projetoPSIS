@@ -1067,7 +1067,7 @@ void * playerThread(void * argv){
 
   pthread_t thread_id;
   sem_init(&(player->sem_inact),0,0);
-  //pthread_create(&thread_id,NULL,playerInactivity,(void*)player);
+  pthread_create(&thread_id,NULL,playerInactivity,(void*)player);
   //pthread_detach(thread_inact);
   //pthread_create(&thread_id,NULL,fruitGenerator,NULL);
   //pthread_create(&thread_id,NULL,fruitGenerator,(void*)&(player->sem_fruit2));
