@@ -182,53 +182,6 @@ void load_board(char * file_name){
 
 }
 
-void lock_player_mutex(player_info* player,int init){
-  if(init){
-    pthread_mutex_lock(&(player->mutex));
-    return;
-  }
-  int x_pacman,y_pacman;
-  int x_monster,y_monster;
-  while(1){
-    x_pacman=player->pacman_x;
-    y_pacman=player->pacman_y;
-    x_monster=player->monster_x;
-    y_monster=player->monster_y;
-    if(x_pacman<0||x_pacman>=game_board.size_x||y_pacman<0||y_pacman>=game_board.size_y||
-    x_monster<0||x_monster>=game_board.size_x||y_monster<0||y_monster>=game_board.size_y)
-      continue;
-    pthread_mutex_lock(&game_board.line_lock[x_pacman]);
-    pthread_mutex_lock(&game_board.column_lock[y_pacman]);
-    if(x_monster!=x_pacman) pthread_mutex_lock(&game_board.line_lock[x_monster]);
-    if(y_monster!=y_pacman) pthread_mutex_lock(&game_board.column_lock[y_monster]);
-    if(game_board.array[x_pacman][y_pacman].player==player||game_board.array[x_monster][y_monster].player==player){
-      pthread_mutex_lock(&(player->mutex));
-      return;
-    }
-    pthread_mutex_unlock(&game_board.column_lock[y_pacman]);
-    pthread_mutex_unlock(&game_board.line_lock[x_pacman]);
-    if(x_monster!=x_pacman) pthread_mutex_unlock(&game_board.line_lock[x_monster]);
-    if(y_monster!=y_pacman) pthread_mutex_unlock(&game_board.column_lock[y_monster]);
-  }
-}
-
-void* unlock_player_mutex(player_info* player,int init){
-  if(init){
-    pthread_mutex_unlock(&(player->mutex));
-  }
-  int x_pacman,y_pacman;
-  int x_monster,y_monster;
-  x_pacman=player->pacman_x;
-  y_pacman=player->pacman_y;
-  x_monster=player->monster_x;
-  y_monster=player->monster_y;
-  pthread_mutex_unlock(&game_board.line_lock[x_pacman]);
-  pthread_mutex_unlock(&game_board.column_lock[y_pacman]);
-  if(x_monster!=x_pacman) pthread_mutex_unlock(&game_board.line_lock[x_monster]);
-  if(y_monster!=y_pacman) pthread_mutex_unlock(&game_board.column_lock[y_monster]);
-  pthread_mutex_unlock(&(player->mutex));
-}
-
 server_message assignRandCoords(player_info* player,int figure_type,int init){
   int color,player_id;
 
@@ -261,7 +214,6 @@ server_message assignRandCoords(player_info* player,int figure_type,int init){
     if(init||(j!=player->pacman_y&&j!=player->monster_y))
       pthread_mutex_unlock(&game_board.column_lock[j]);
   }
-  pthread_mutex_lock(&(player->mutex));
   if(figure_type==MONSTER){
     player->monster_x=i;
     player->monster_y=j;
@@ -272,7 +224,6 @@ server_message assignRandCoords(player_info* player,int figure_type,int init){
     player->pacman_y=j;
     player->pacman_eaten=0;
   }
-  pthread_mutex_unlock(&(player->mutex));
   //unlock_player_mutex(player,init);
   server_message output;
   output.type=figure_type;
@@ -705,7 +656,6 @@ int validate_play_get_answer(client_message input, player_info* player){
     pthread_mutex_unlock(&game_board.line_lock[new_x]);
   if(new_y!=current_y)
     pthread_mutex_unlock(&game_board.column_lock[new_y]);
-  pthread_mutex_unlock(&(player->mutex));
   printf("Sending message\n");
   if(send_message){
       send_to_players_2_messages(output);
@@ -724,9 +674,10 @@ int validate_play_get_answer(client_message input, player_info* player){
   new_event2.type = Event_ShowFigure;
   new_event2.user.data1 = &output[1];
   SDL_PushEvent(&new_event2);
+  pthread_mutex_unlock(&(player->mutex));
   return 1;
   }
-
+  pthread_mutex_unlock(&(player->mutex));
   return 0;
 }
 
@@ -739,7 +690,9 @@ void * monsterEaten(void * argv){
       if((player->exit)==1){//player exits
         return NULL;
       }
+      pthread_mutex_lock(&player->mutex);
       msg=assignRandCoords(player,MONSTER,NOT_INIT);
+      pthread_mutex_unlock(&player->mutex);
       send_to_players(&msg);
     }
   }
@@ -755,7 +708,9 @@ void * pacmanEaten(void * argv){
       if((player->exit)==1){//player exits
         return NULL;
       }
+      pthread_mutex_lock(&player->mutex);
       msg=assignRandCoords(player,PACMAN,NOT_INIT);
+      pthread_mutex_unlock(&player->mutex);
       send_to_players(&msg);
     }
   }
@@ -772,8 +727,6 @@ void * playerInactivity(void * argv){
   int pacman_x, pacman_y;
   SDL_Event new_event;
   int current_figure;
-  int locked_monster=0, locked_pacman=0;
-  int x_monster_lock,y_monster_lock,x_pacman_lock,y_pacman_lock;
 
   while(1){
     if(sem_timedwait(&(player->sem_inact),&timeout)==-1){
@@ -781,65 +734,24 @@ void * playerInactivity(void * argv){
           SDL_zero(new_event);
           new_event.type = Event_ShowFigure;
           //lock_player_mutex(player,0);
-          do{
-            x_monster_lock=player->monster_x;
-            y_monster_lock=player->monster_y;
-            pthread_mutex_lock(&game_board.line_lock[x_monster_lock]);
-            pthread_mutex_lock(&game_board.column_lock[y_monster_lock]);
-            if(game_board.array[x_monster_lock][y_monster_lock].player==player)
-            {
-              locked_monster=1;
-              break;
-            }
-            pthread_mutex_unlock(&game_board.line_lock[x_monster_lock]);
-            pthread_mutex_unlock(&game_board.column_lock[y_monster_lock]);
-          }while(!player->monster_eaten);
-
-          do{
-            x_pacman_lock=player->pacman_x;
-            y_pacman_lock=player->pacman_y;
-            if(x_pacman_lock!=x_monster_lock)
-              pthread_mutex_lock(&game_board.line_lock[x_pacman_lock]);
-            if(y_pacman_lock!=y_monster_lock)
-              pthread_mutex_lock(&game_board.column_lock[y_pacman_lock]);
-            if(game_board.array[x_pacman_lock][y_pacman_lock].player==player)
-            {
-              locked_pacman=1;
-              break;
-            }
-            if(x_pacman_lock!=x_monster_lock)
-              pthread_mutex_unlock(&game_board.line_lock[x_pacman_lock]);
-            if(y_pacman_lock!=y_monster_lock)
-              pthread_mutex_unlock(&game_board.column_lock[y_pacman_lock]);
-          }while(!player->pacman_eaten);
-
           pthread_mutex_lock(&(player->mutex));
-
           pacman_x=player->pacman_x;
           pacman_y=player->pacman_y;
           msg1.type=EMPTY;
           msg1.x=pacman_x;
           msg1.y=pacman_y;
+          pthread_mutex_lock(&(game_board.line_lock[player->pacman_x]));
+          pthread_mutex_lock(&(game_board.column_lock[player->pacman_y]));
           current_figure=game_board.array[pacman_x][pacman_y].figure_type;
           game_board.array[pacman_x][pacman_y].figure_type=EMPTY;
           game_board.array[pacman_x][pacman_y].player_id=-1;
-          pthread_mutex_unlock(&(player->mutex));
-          if(locked_pacman){
-            if(!locked_monster||(x_pacman_lock!=x_monster_lock))
-              pthread_mutex_unlock(&game_board.line_lock[x_pacman_lock]);
-            if(!locked_monster||(y_pacman_lock!=y_monster_lock))
-              pthread_mutex_unlock(&game_board.column_lock[y_pacman_lock]);
-            locked_pacman=0;
-          }
-          if(locked_monster){
-            pthread_mutex_unlock(&game_board.line_lock[x_monster_lock]);
-            pthread_mutex_unlock(&game_board.column_lock[y_monster_lock]);
-            locked_monster=0;
-          }
+          pthread_mutex_unlock(&(game_board.line_lock[player->pacman_x]));
+          pthread_mutex_unlock(&(game_board.column_lock[player->pacman_y]));
           new_event.user.data1 = &msg1;
           SDL_PushEvent(&new_event);
           send_to_players(&msg1);
           msg2=assignRandCoords(player,current_figure,NOT_INIT);
+          pthread_mutex_unlock(&(player->mutex));
           send_to_players(&msg2);
           timeout.tv_sec=time(NULL)+8;
         }
@@ -1055,10 +967,11 @@ void * playerThread(void * argv){
       pthread_mutex_unlock(&game_board.line_lock[i]);
     }
   }
-
+  pthread_mutex_lock(&player->mutex);
   msg=assignRandCoords(player,MONSTER,INITIALIZATION);
   send_to_players(&msg);
   msg=assignRandCoords(player,PACMAN,INITIALIZATION);
+  pthread_mutex_unlock(&player->mutex);
   send_to_players(&msg);
   fruit_new_player(players,fruits);
 
