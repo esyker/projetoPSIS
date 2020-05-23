@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <string.h>
 #include <semaphore.h>
 #include <errno.h>
@@ -26,7 +27,6 @@ int sock_fd;
 int server_socket;
 LinkedList* players;
 LinkedList *fruits;
-//pthread_mutex_t players_mutex;
 
 int currSize=1;
 int currPlayerCount=0;
@@ -58,39 +58,6 @@ void send_to_players_no_lock(void *msg){
 void send_to_players_2_messages(void *msg){
   trasverse(players,msg,send_to_player_2_messages);
 }
-
-int find_by_id(void* data, void* condition){
-  if(((player_info*)data)->client_fd==(*(int*)condition))
-    return 1;
-  else return 0;
-}
-
-player_info* find_player(int player_id){
-   return (player_info*)findby(players,find_by_id,&player_id);
-}
-/*
-void clearFruitInfo(LinkedList* list){
-  SDL_Event new_event;
-  server_message msg;
-  server_message* event_data;
-
-  fruit_info* fruit;
-  Node * current = list->root;
-  Node * next = current;
-  while(current != NULL){
-    next = current->next;
-    fruit=(fruit_info*)current->data;
-
-    fruit->exit=1;
-    sem_post(fruit->sem_fruit);
-  	free(current);
-    current = next;
-  }
-  list->root = NULL;
-	list->tail = NULL;
-	list->_size = 0;
-}*/
-
 
 void removeFirstFruitInfo(LinkedList* list){
   fruit_info* fruit;
@@ -280,7 +247,7 @@ server_message change_board(int x, int y,int figure_type,
   return msg;
 }
 
-int validate_play_get_answer(client_message input, player_info* player){
+server_message* validate_play_get_answer(client_message input, player_info* player){
 
   server_message* output;
   server_message msg;
@@ -542,33 +509,13 @@ int validate_play_get_answer(client_message input, player_info* player){
     pthread_mutex_unlock(&game_board.line_lock[new_x]);
   if(new_y!=current_y)
     pthread_mutex_unlock(&game_board.column_lock[new_y]);
-  printf("Sending message\n");
-  if(send_message){
-      send_to_players_2_messages(output);
-  }
-  printf("Unlocked players mutex\n");
 
-  if(send_message){
-  SDL_Event new_event1,new_event2;
-  //event_data = malloc(sizeof(server_message));
-  //*event_data = msg;
-  SDL_zero(new_event1);
-  new_event1.type = Event_ShowFigure;
-  new_event1.user.data1 = &output[0];
-  SDL_PushEvent(&new_event1);
-  SDL_zero(new_event2);
-  new_event2.type = Event_ShowFigure;
-  new_event2.user.data1 = &output[1];
-  SDL_PushEvent(&new_event2);
   if(player_locked)pthread_mutex_unlock(&(new_player->mutex));
   if(fruit_locked)pthread_mutex_unlock(&(new_fruit->mutex));
   pthread_mutex_unlock(&(player->mutex));
-  return 1;
-  }
-  if(player_locked)pthread_mutex_unlock(&(new_player->mutex));
-  if(fruit_locked)pthread_mutex_unlock(&(new_fruit->mutex));
-  pthread_mutex_unlock(&(player->mutex));
-  return 0;
+  if(send_message)
+    return output;
+  return NULL;
 }
 
 void * monsterEaten(void * argv){
@@ -616,6 +563,7 @@ void * playerInactivity(void * argv){
 
   int pacman_x, pacman_y;
   SDL_Event new_event;
+  server_message* event_data;
   int current_figure;
 
   while(1){
@@ -639,7 +587,9 @@ void * playerInactivity(void * argv){
           game_board.array[pacman_x][pacman_y].fruit=NULL;
           pthread_mutex_unlock(&(game_board.line_lock[player->pacman_x]));
           pthread_mutex_unlock(&(game_board.column_lock[player->pacman_y]));
-          new_event.user.data1 = &msg1;
+          event_data=(server_message*)malloc(sizeof(server_message));
+          *event_data=msg1;
+          new_event.user.data1 = event_data;
           SDL_PushEvent(&new_event);
           send_to_players(&msg1);
           msg2=assignRandCoords(player,current_figure,NOT_INIT);
@@ -776,7 +726,9 @@ void fruit_player_disconnect(LinkedList* players, LinkedList* fruits){
 }
 
 void player_disconect(player_info* player){
-  server_message* output=(server_message*)malloc(2*sizeof(server_message));
+  server_message* event_data1, *event_data2;
+  event_data1=(server_message*)malloc(sizeof(server_message));
+  event_data2=(server_message*)malloc(sizeof(server_message));
   server_message msg;
 
   int monster_x,monster_y,pacman_x,pacman_y;
@@ -807,29 +759,27 @@ void player_disconect(player_info* player){
   msg.type=EMPTY;
   msg.x=monster_x;
   msg.y=monster_y;
-  output[0]=msg;
+  *event_data1=msg;
   msg.x=pacman_x;
   msg.y=pacman_y;
-  output[1]=msg;
+  *event_data2=msg;
   removeNode(players,player);
   fruit_player_disconnect(players,fruits);
   player->exit=1;
   sem_post(&(player->sem_inact));
   sem_post(&(player->sem_monster_eaten));
   sem_post(&(player->sem_pacman_eaten));
-  send_to_players(&output[0]);
-  send_to_players(&output[1]);
-  SDL_Event new_event1,new_event2;
-  //event_data = malloc(sizeof(server_message));
-  //*event_data = msg;
-  SDL_zero(new_event1);
-  new_event1.type = Event_ShowFigure;
-  new_event1.user.data1 = &output[0];
-  SDL_PushEvent(&new_event1);
-  SDL_zero(new_event2);
-  new_event2.type = Event_ShowFigure;
-  new_event2.user.data1 = &output[1];
-  SDL_PushEvent(&new_event2);
+  send_to_players(event_data1);
+  send_to_players(event_data2);
+  SDL_Event new_event;
+  SDL_zero(new_event);
+  new_event.type = Event_ShowFigure;
+  new_event.user.data1 = event_data1;
+  SDL_PushEvent(&new_event);
+  SDL_zero(new_event);
+  new_event.type = Event_ShowFigure;
+  new_event.user.data1 = event_data2;
+  SDL_PushEvent(&new_event);
   return;
 }
 
@@ -840,10 +790,11 @@ void * playerThread(void * argv){
 
   int err_rcv;
 
+  server_message* result;
   server_message msg;
-  server_message *event_data;
-  client_message client_msg;
+  server_message *event_data1,*event_data2;
   SDL_Event new_event;
+  client_message client_msg;
 
   printf("\nlock on mutex trying\n");
   int client_sock_fd=player->client_fd;
@@ -892,7 +843,7 @@ void * playerThread(void * argv){
 
   pthread_t thread_id;
   sem_init(&(player->sem_inact),0,0);
-  pthread_create(&thread_id,NULL,playerInactivity,(void*)player);
+  //pthread_create(&thread_id,NULL,playerInactivity,(void*)player);
   //pthread_detach(thread_inact);
   //pthread_create(&thread_id,NULL,fruitGenerator,NULL);
   //pthread_create(&thread_id,NULL,fruitGenerator,(void*)&(player->sem_fruit2));
@@ -908,52 +859,39 @@ void * playerThread(void * argv){
     }
     if(message_available>0){
       printf("received %d byte %d %d %d \n", err_rcv, client_msg.figure_type,client_msg.x,client_msg.y);
-      if(validate_play_get_answer(client_msg,player)){
+      if((result=validate_play_get_answer(client_msg,player))!=NULL){
+        send_to_players_2_messages(result);
+        SDL_zero(new_event);
+        new_event.type = Event_ShowFigure;
+        event_data1 = (server_message*)malloc(sizeof(server_message));
+        *event_data1 = result[0];
+        new_event.user.data1 = event_data1;
+        SDL_PushEvent(&new_event);
+        SDL_zero(new_event);
+        new_event.type = Event_ShowFigure;
+        event_data2 = (server_message*)malloc(sizeof(server_message));
+        *event_data2 = result[1];
+        new_event.user.data1 = event_data2;
+        SDL_PushEvent(&new_event);
+        free(result);
         message_available--;
         sem_post(&(player->sem_inact));
       }
     }
-    /*
-    msg.type=client_msg.figure_type;
-    msg.x=client_msg.x;
-    msg.y=client_msg.y;
-    msg.c=my_color;
-    msg.player_id=client_sock_fd;
-
-    event_data = (server_message*)malloc(sizeof(server_message));
-    *event_data = msg;
-    SDL_zero(new_event);
-    new_event.type = Event_ShowFigure;
-    new_event.user.data1 = event_data;
-    SDL_PushEvent(&new_event);
-
-    pthread_mutex_lock(&game_board.column_lock[msg.y]);
-    pthread_mutex_lock(&game_board.line_lock[msg.x]);
-    game_board.array[msg.x][msg.y].player_id=client_sock_fd;
-    game_board.array[msg.x][msg.y].figure_type=client_msg.figure_type;
-    game_board.array[msg.x][msg.y].color=my_color;
-    pthread_mutex_unlock(&game_board.column_lock[msg.y]);
-    pthread_mutex_unlock(&game_board.line_lock[msg.x]);
-
-    pthread_mutex_lock(&players_mutex);
-    for(int i=0;i<currSize;i++){
-      send(players[i].client_fd, &msg, sizeof(msg), 0);
-    }
-    pthread_mutex_unlock(&players_mutex);*/
   }
-  //pthread_cancel(thread_inact);
   player_disconect(player);
-  //currPlayerCount--;
   return NULL;
+}
+void send_scores(){
+    pthread_mutex_lock(&(players->mutex));
+
+    pthread_mutex_unlock(&(players->mutex));
 }
 
 void *serverThread(void * argc){
   struct sockaddr_in client_addr;
   socklen_t size_addr = sizeof(client_addr);
 
-  //pthread_mutex_lock(&players_mutex);
-  //players=(player_info*)malloc(currSize*sizeof(player_info));
-  //pthread_mutex_unlock(&players_mutex);
   players=constructList();
   fruits=constructList();
 
@@ -997,6 +935,8 @@ int main(int argc , char* argv[]){
 
   Event_ShowFigure = SDL_RegisterEvents(1);
 
+  //do not abort program for broken pipe
+  signal(SIGPIPE, SIG_IGN);
 
   struct sockaddr_in server_local_addr;
 
@@ -1030,13 +970,7 @@ int main(int argc , char* argv[]){
           paint_brick(i,j);
     }
   }
-  /*
-  if (pthread_mutex_init(&players_mutex, NULL) != 0) {
-        printf("\n board mutex init has failed\n");
-        exit(-1);
-  }*/
-  // can we do the accept here?
-  // no the accept should be on the thread
+
   pthread_create(&thread_id, NULL, serverThread, NULL);
 
 
@@ -1052,12 +986,11 @@ int main(int argc , char* argv[]){
       if(event.type == Event_ShowFigure){
         server_message * data_ptr;
         data_ptr = event.user.data1;
-        printf("address:%p type:%d\n",data_ptr,data_ptr->type);
         figure_type = data_ptr->type;
         x=data_ptr->x;
         y=data_ptr->y;
         color=data_ptr->c;
-
+        printf("address:%p type:%d x:%d y:%d\n",data_ptr,data_ptr->type,x,y);
         int r,g,b;
         rgb_360(color, &r, &g, &b);
 
@@ -1082,7 +1015,7 @@ int main(int argc , char* argv[]){
         else if(figure_type==LEMON){
             paint_lemon(x,y);//yellow
         }
-        printf("new event received\n");
+        free(data_ptr);
       }
     }
   }

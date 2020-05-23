@@ -1,4 +1,4 @@
-typedef enum {INIT=-1,EMPTY=0,BRICK=1,PACMAN=2,MONSTER=3,CHERRY=4,LEMON=5,POWER_PACMAN=6}event_type;
+typedef enum {INIT=-1,EMPTY=0,BRICK=1,PACMAN=2,MONSTER=3,CHERRY=4,LEMON=5,POWER_PACMAN=6,SCORE_MSG=9}event_type;
 
 typedef struct server_message{
   int type;//-1 initialization message, 0 clear place, 1 brick, 2 pacman, 3 monster, 4 fruit, 9 update_score
