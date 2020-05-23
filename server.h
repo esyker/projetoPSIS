@@ -47,6 +47,7 @@ typedef struct fruit_info{
   int y;
   int type;//4 CHERRY, 5 LEMON
   sem_t sem_fruit;
+  pthread_mutex_t mutex;//used to read or write the current position of the figures
   int id;//id is the thread id, in order to be unique
   pthread_t thread_id;
   int exit;//fruit thread exits

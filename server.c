@@ -162,6 +162,8 @@ void load_board(char * file_name){
       else
         game_board.array[i][j].figure_type=BRICK;
       game_board.array[i][j].player_id=-1;
+      game_board.array[i][j].player=NULL;
+      game_board.array[i][j].fruit=NULL;
     }
   }
 
@@ -273,6 +275,9 @@ int validate_play_get_answer(client_message input, player_info* player){
   server_message* output;
   server_message msg;
   int send_message=0;
+  fruit_info* new_fruit;
+  player_info* new_player;
+  int fruit_locked=0, player_locked=0;
 
   pthread_mutex_lock(&(player->mutex));
 
@@ -316,18 +321,6 @@ int validate_play_get_answer(client_message input, player_info* player){
   if(new_x>=game_board.size_x) new_x=game_board.size_x-2;
   if(new_y>=game_board.size_y) new_y=game_board.size_y-2;
 
-  printf("Trying x=%d lock\n",current_x);
-  pthread_mutex_lock(&game_board.line_lock[current_x]);
-  printf("Trying y=%d lock\n",current_y);
-  pthread_mutex_lock(&game_board.column_lock[current_y]);
-  printf("Trying x=%d lock\n",new_x);
-  if(new_x!=current_x){
-    pthread_mutex_lock(&game_board.line_lock[new_x]);
-  }
-  printf("Trying y=%d lock\n",new_y);
-  if(new_y!=current_y){
-    pthread_mutex_lock(&game_board.column_lock[new_y]);
-  }
   //CHARACTER MOVES TO BRICK ->BOUNCE
   if(game_board.array[new_x][new_y].figure_type==BRICK){
     int bounce_x=current_x,bounce_y=current_y;
@@ -338,32 +331,45 @@ int validate_play_get_answer(client_message input, player_info* player){
     if(bounce_x>=game_board.size_x||bounce_x<0||bounce_y>=game_board.size_y
       ||bounce_y<0)
     {
-      pthread_mutex_unlock(&game_board.line_lock[current_x]);
-      pthread_mutex_unlock(&game_board.column_lock[current_y]);
-      if(new_x!=current_x)
-        pthread_mutex_unlock(&game_board.line_lock[new_x]);
-      if(new_y!=current_y)
-        pthread_mutex_unlock(&game_board.column_lock[new_y]);
       pthread_mutex_unlock(&(player->mutex));
       return 0;
-    }
-    if(bounce_x!=new_x&&bounce_x!=current_x){
-      pthread_mutex_unlock(&game_board.line_lock[new_x]);
-      pthread_mutex_lock(&game_board.line_lock[bounce_x]);
-    }
-    if(bounce_y!=new_y&&bounce_y!=current_y){
-      pthread_mutex_unlock(&game_board.column_lock[new_y]);
-      pthread_mutex_lock(&game_board.column_lock[bounce_y]);
     }
     new_x=bounce_x;
     new_y=bounce_y;
   }
 
+  printf("Trying x=%d lock\n",current_x);
+  pthread_mutex_lock(&game_board.line_lock[current_x]);
+  printf("Trying y=%d lock\n",current_y);
+  pthread_mutex_lock(&game_board.column_lock[current_y]);
+  printf("Trying new player or fruit lock\n");
+  if(game_board.array[new_x][new_y].player!=NULL&&game_board.array[new_x][new_y].player!=player){
+    pthread_mutex_lock(&game_board.array[new_x][new_y].player->mutex);
+    new_player=game_board.array[new_x][new_y].player;
+    player_locked=1;
+  }
+  else if(game_board.array[new_x][new_y].fruit!=NULL){
+    pthread_mutex_lock(&game_board.array[new_x][new_y].fruit->mutex);
+    new_fruit=game_board.array[new_x][new_y].fruit;
+    fruit_locked=1;
+  }
+  printf("Trying x=%d lock\n",new_x);
+  if(new_x!=current_x){
+    pthread_mutex_lock(&game_board.line_lock[new_x]);
+  }
+  printf("Trying y=%d lock\n",new_y);
+  if(new_y!=current_y){
+    pthread_mutex_lock(&game_board.column_lock[new_y]);
+  }
+
+  int new_figure_type=game_board.array[new_x][new_y].figure_type;
+  int new_id=game_board.array[new_x][new_y].player_id;
+  int new_color=game_board.array[new_x][new_y].color;
+  int current_figure=game_board.array[current_x][current_y].figure_type;
+
   //CHARACTERS OF THE SAME PLAYER-> CHANGE POSITION
   if(game_board.array[new_x][new_y].player_id==player->client_fd){
     output=(server_message*)malloc(2*sizeof(server_message));
-    int new_figure_type=game_board.array[new_x][new_y].figure_type;
-    int current_figure=game_board.array[current_x][current_y].figure_type;
     msg.type=current_figure;
     msg.x=new_x;
     msg.y=new_y;
@@ -396,12 +402,11 @@ int validate_play_get_answer(client_message input, player_info* player){
   //CHARACTER MOVES TO EMPTY POSITION -> CHANGE POSITION
   else if(game_board.array[new_x][new_y].figure_type==EMPTY){
     output=(server_message*)malloc(2*sizeof(server_message));
-    int figure_type=game_board.array[current_x][current_y].figure_type;
     msg.type=EMPTY;
     msg.x=current_x;
     msg.y=current_y;
     output[0]=msg;
-    msg.type=figure_type;
+    msg.type=current_figure;
     msg.x=new_x;
     msg.y=new_y;
     msg.player_id=player->client_fd;
@@ -409,7 +414,9 @@ int validate_play_get_answer(client_message input, player_info* player){
     output[1]=msg;
     game_board.array[current_x][current_y].figure_type=EMPTY;
     game_board.array[current_x][current_y].player_id=-1;
-    game_board.array[new_x][new_y].figure_type=figure_type;
+    game_board.array[current_x][current_y].player=NULL;
+    game_board.array[current_x][current_y].fruit=NULL;
+    game_board.array[new_x][new_y].figure_type=current_figure;
     game_board.array[new_x][new_y].color=player->color;
     game_board.array[new_x][new_y].player_id=player->client_fd;
     game_board.array[new_x][new_y].player=player;
@@ -430,14 +437,6 @@ int validate_play_get_answer(client_message input, player_info* player){
   (game_board.array[new_x][new_y].figure_type==POWER_PACMAN&&input.figure_type==PACMAN))
   &&(game_board.array[new_x][new_y].player_id!=player->client_fd)){
     output=(server_message*)malloc(2*sizeof(server_message));
-    player_info* new_player=game_board.array[new_x][new_y].player;
-    pthread_mutex_lock(&(new_player->mutex));
-    int new_id=game_board.array[new_x][new_y].player_id;
-    int new_color=game_board.array[new_x][new_y].color;
-    int new_figure_type=game_board.array[new_x][new_y].figure_type;
-    int current_figure=game_board.array[current_x][current_y].figure_type;
-    printf("NEW PLAYER ID:%d\n",new_player->client_fd);
-    printf("LOCKED NEW PLAYER MUTEX\n");
     msg.type=new_figure_type;
     msg.x=current_x;
     msg.y=current_y;
@@ -470,7 +469,6 @@ int validate_play_get_answer(client_message input, player_info* player){
       new_player->pacman_x=current_x;
       new_player->pacman_y=current_y;
     }
-    pthread_mutex_unlock(&(new_player->mutex));
     send_message=1;
   }
 
@@ -480,7 +478,6 @@ int validate_play_get_answer(client_message input, player_info* player){
     if(game_board.array[new_x][new_y].figure_type==LEMON||
       game_board.array[new_x][new_y].figure_type==CHERRY){
       output=(server_message*)malloc(2*sizeof(server_message));
-      fruit_info* fruit =game_board.array[new_x][new_y].fruit;
       msg.type=EMPTY;
       msg.x=current_x;
       msg.y=current_y;
@@ -497,19 +494,19 @@ int validate_play_get_answer(client_message input, player_info* player){
       game_board.array[new_x][new_y].player=player;
       game_board.array[current_x][current_y].figure_type=EMPTY;
       game_board.array[current_x][current_y].player_id=-1;
+      game_board.array[current_x][current_y].player=NULL;
+      game_board.array[current_x][current_y].fruit=NULL;
       player->pacman_x=new_x;
       player->pacman_y=new_y;
       player->score+=1;
       player->super_powered_pacman=1;
       player->monster_eat_count=2;
-      sem_post(&(fruit->sem_fruit));
+      sem_post(&(new_fruit->sem_fruit));
       send_message=1;
     }
     //PACMAN INTO MONSTER-> MONSTER EATEN AND MOVED TO RANDOM POSITION, OPPONENT SCORE INCREASES
     else if(game_board.array[new_x][new_y].figure_type==MONSTER){
       output=(server_message*)malloc(2*sizeof(server_message));
-      player_info* new_player=game_board.array[new_x][new_y].player;
-      pthread_mutex_lock(&(new_player->mutex));
       if(player->super_powered_pacman){
         player->monster_eat_count--;
         msg.type=EMPTY;
@@ -535,6 +532,8 @@ int validate_play_get_answer(client_message input, player_info* player){
         game_board.array[new_x][new_y].player=player;
         game_board.array[current_x][current_y].figure_type=EMPTY;
         game_board.array[current_x][current_y].player_id=-1;
+        game_board.array[current_x][current_y].fruit=NULL;
+        game_board.array[current_x][current_y].player=NULL;
         player->pacman_x=new_x;
         player->pacman_y=new_y;
         player->score+=1;
@@ -549,11 +548,12 @@ int validate_play_get_answer(client_message input, player_info* player){
         output[1]=msg;
         game_board.array[current_x][current_y].figure_type=EMPTY;
         game_board.array[current_x][current_y].player_id=-1;
+        game_board.array[current_x][current_y].player=NULL;
+        game_board.array[current_x][current_y].fruit=NULL;
         player->pacman_eaten=1;
         new_player->score+=1;
         sem_post(&(player->sem_pacman_eaten));
       }
-      pthread_mutex_unlock(&(new_player->mutex));
       send_message=1;
     }
   }
@@ -563,7 +563,6 @@ int validate_play_get_answer(client_message input, player_info* player){
     if(game_board.array[new_x][new_y].figure_type==LEMON||
       game_board.array[new_x][new_y].figure_type==CHERRY){
       output=(server_message*)malloc(2*sizeof(server_message));
-      fruit_info* fruit =game_board.array[new_x][new_y].fruit;
       msg.type=EMPTY;
       msg.x=current_x;
       msg.y=current_y;
@@ -580,18 +579,18 @@ int validate_play_get_answer(client_message input, player_info* player){
       game_board.array[new_x][new_y].player=player;
       game_board.array[current_x][current_y].figure_type=EMPTY;
       game_board.array[current_x][current_y].player_id=-1;
+      game_board.array[current_x][current_y].player=NULL;
+      game_board.array[current_x][current_y].fruit=NULL;
       player->monster_x=new_x;
       player->monster_y=new_y;
       player->score+=1;
-      sem_post(&(fruit->sem_fruit));
+      sem_post(&(new_fruit->sem_fruit));
       send_message=1;
     }
 
     //MONSTER AGAINST SUPERPOWERED PACMAN -> MONSTER EATEN AND MOVED TO RANDOM POSITION, OPPONENT SCORE INCREASES
     else if(game_board.array[new_x][new_y].figure_type==POWER_PACMAN){
       output=(server_message*)malloc(2*sizeof(server_message));
-      player_info* new_player=game_board.array[new_x][new_y].player;
-      pthread_mutex_lock(&(new_player->mutex));
       msg.type=EMPTY;
       msg.x=current_x;
       msg.y=current_y;
@@ -613,17 +612,16 @@ int validate_play_get_answer(client_message input, player_info* player){
       output[1]=msg;
       game_board.array[current_x][current_y].figure_type=EMPTY;
       game_board.array[current_x][current_y].player_id=-1;
+      game_board.array[current_x][current_y].player=NULL;
+      game_board.array[current_x][current_y].fruit=NULL;
       player->monster_eaten=1;
       new_player->score+=1;
       sem_post(&(player->sem_monster_eaten));
-      pthread_mutex_unlock(&(new_player->mutex));
       send_message=1;
     }
     //MONSTER AGAINST NORMAL PACMAN -> PACMAN EATEN AND MOVED TO RANDOM POSITION, SCORE INCREASES
     else if(game_board.array[new_x][new_y].figure_type==PACMAN){
       output=(server_message*)malloc(2*sizeof(server_message));
-      player_info* new_player=game_board.array[new_x][new_y].player;
-      pthread_mutex_lock(&(new_player->mutex));
       msg.type=EMPTY;
       msg.x=current_x;
       msg.y=current_y;
@@ -640,12 +638,13 @@ int validate_play_get_answer(client_message input, player_info* player){
       game_board.array[new_x][new_y].player=player;
       game_board.array[current_x][current_y].figure_type=EMPTY;
       game_board.array[current_x][current_y].player_id=-1;
+      game_board.array[current_x][current_y].player=NULL;
+      game_board.array[current_x][current_y].fruit=NULL;
       player->monster_x=new_x;
       player->monster_y=new_y;
       player->score+=1;
       new_player->pacman_eaten=1;
       sem_post(&(new_player->sem_pacman_eaten));
-      pthread_mutex_unlock(&(new_player->mutex));
       send_message=1;
     }
 
@@ -674,9 +673,13 @@ int validate_play_get_answer(client_message input, player_info* player){
   new_event2.type = Event_ShowFigure;
   new_event2.user.data1 = &output[1];
   SDL_PushEvent(&new_event2);
+  if(player_locked)pthread_mutex_unlock(&(new_player->mutex));
+  if(fruit_locked)pthread_mutex_unlock(&(new_fruit->mutex));
   pthread_mutex_unlock(&(player->mutex));
   return 1;
   }
+  if(player_locked)pthread_mutex_unlock(&(new_player->mutex));
+  if(fruit_locked)pthread_mutex_unlock(&(new_fruit->mutex));
   pthread_mutex_unlock(&(player->mutex));
   return 0;
 }
@@ -745,6 +748,8 @@ void * playerInactivity(void * argv){
           current_figure=game_board.array[pacman_x][pacman_y].figure_type;
           game_board.array[pacman_x][pacman_y].figure_type=EMPTY;
           game_board.array[pacman_x][pacman_y].player_id=-1;
+          game_board.array[pacman_x][pacman_y].player=NULL;
+          game_board.array[pacman_x][pacman_y].fruit=NULL;
           pthread_mutex_unlock(&(game_board.line_lock[player->pacman_x]));
           pthread_mutex_unlock(&(game_board.column_lock[player->pacman_y]));
           new_event.user.data1 = &msg1;
@@ -781,13 +786,18 @@ void * fruitGenerator(void * argv){
   while(1){
         if(sem_wait(&(fruit->sem_fruit))==0){
             if((fruit->exit)==1){
+              pthread_mutex_lock(&fruit->mutex);
               pthread_mutex_lock(&game_board.line_lock[fruit->x]);
               pthread_mutex_lock(&game_board.column_lock[fruit->y]);
               game_board.array[fruit->x][fruit->y].figure_type=EMPTY;
               game_board.array[fruit->x][fruit->y].player_id=-1;
+              game_board.array[fruit->x][fruit->y].player=NULL;
+              game_board.array[fruit->x][fruit->y].fruit=NULL;
               sem_destroy(&fruit->sem_fruit);
               pthread_mutex_unlock(&game_board.line_lock[fruit->x]);
               pthread_mutex_unlock(&game_board.column_lock[fruit->y]);
+              pthread_mutex_unlock(&fruit->mutex);
+              pthread_mutex_destroy(&fruit->mutex);
               output.x=fruit->x;
               output.y=fruit->y;
               free(fruit);
@@ -803,34 +813,37 @@ void * fruitGenerator(void * argv){
             }
             if(!firstime) sleep(2);
             else firstime=0;
-              fruit->type=(rand()%2)+4;// 4 or 5
-              while(1){
-                i=rand()%game_board.size_x;
-                j=rand()%game_board.size_y;
-                pthread_mutex_lock(&game_board.line_lock[i]);
-                pthread_mutex_lock(&game_board.column_lock[j]);
-                if(game_board.array[i][j].figure_type==EMPTY){
-                  game_board.array[i][j].figure_type=fruit->type;
-                  game_board.array[i][j].fruit=fruit;
-                  pthread_mutex_unlock(&game_board.line_lock[i]);
-                  pthread_mutex_unlock(&game_board.column_lock[j]);
-                  break;
-                }
+
+            pthread_mutex_lock(&fruit->mutex);
+            fruit->type=(rand()%2)+4;// 4 or 5
+            while(1){
+              i=rand()%game_board.size_x;
+              j=rand()%game_board.size_y;
+              pthread_mutex_lock(&game_board.line_lock[i]);
+              pthread_mutex_lock(&game_board.column_lock[j]);
+              if(game_board.array[i][j].figure_type==EMPTY){
+                game_board.array[i][j].figure_type=fruit->type;
+                game_board.array[i][j].fruit=fruit;
                 pthread_mutex_unlock(&game_board.line_lock[i]);
                 pthread_mutex_unlock(&game_board.column_lock[j]);
+                break;
               }
-              fruit->x=i;
-              fruit->y=j;
-              output.type=fruit->type;
-              output.x=i;
-              output.y=j;
-              send_to_players(&output);
-              event_data = (server_message*)malloc(sizeof(server_message));
-              *event_data = output;
-              SDL_zero(new_event);
-              new_event.type = Event_ShowFigure;
-              new_event.user.data1 = event_data;
-              SDL_PushEvent(&new_event);
+              pthread_mutex_unlock(&game_board.line_lock[i]);
+              pthread_mutex_unlock(&game_board.column_lock[j]);
+            }
+            fruit->x=i;
+            fruit->y=j;
+            output.type=fruit->type;
+            output.x=i;
+            output.y=j;
+            send_to_players(&output);
+            event_data = (server_message*)malloc(sizeof(server_message));
+            *event_data = output;
+            SDL_zero(new_event);
+            new_event.type = Event_ShowFigure;
+            new_event.user.data1 = event_data;
+            SDL_PushEvent(&new_event);
+            pthread_mutex_unlock(&fruit->mutex);
         }
   }
   return NULL;
@@ -846,10 +859,18 @@ void fruit_new_player(LinkedList* players, LinkedList* fruits){
   }
   else if((players->_size)>1){//remove two fruit threads fromm the fruit list
     fruit_info * fruit1=(fruit_info*)malloc(sizeof(fruit_info));
+    if (pthread_mutex_init(&(fruit1->mutex), NULL) != 0) {
+          printf("\nfruit mutex init has failed\n");
+          exit(-1);
+    }
     sem_init(&(fruit1->sem_fruit),0,1);
     add_no_lock(fruits,fruit1);
     pthread_create(&fruit1->thread_id,NULL,fruitGenerator,(void*)fruit1);
     fruit_info * fruit2=(fruit_info*)malloc(sizeof(fruit_info));
+    if (pthread_mutex_init(&(fruit2->mutex), NULL) != 0) {
+          printf("\nfruit mutex init has failed\n");
+          exit(-1);
+    }
     sem_init(&(fruit2->sem_fruit),0,1);
     add_no_lock(fruits,fruit2);
     pthread_create(&fruit2->thread_id,NULL,fruitGenerator,(void*)fruit2);
@@ -883,12 +904,16 @@ void player_disconect(player_info* player){
   pthread_mutex_lock(&game_board.column_lock[monster_y]);
   game_board.array[monster_x][monster_y].figure_type=EMPTY;
   game_board.array[monster_x][monster_y].player_id=-1;
+  game_board.array[monster_x][monster_y].player=NULL;
+  game_board.array[monster_x][monster_y].fruit=NULL;
   pthread_mutex_unlock(&game_board.line_lock[monster_x]);
   pthread_mutex_unlock(&game_board.column_lock[monster_y]);
   pthread_mutex_lock(&game_board.line_lock[pacman_x]);
   pthread_mutex_lock(&game_board.column_lock[pacman_y]);
   game_board.array[pacman_x][pacman_y].figure_type=EMPTY;
   game_board.array[pacman_x][pacman_y].player_id=-1;
+  game_board.array[pacman_x][pacman_y].player=NULL;
+  game_board.array[pacman_x][pacman_y].fruit=NULL;
   pthread_mutex_unlock(&game_board.line_lock[pacman_x]);
   pthread_mutex_unlock(&game_board.column_lock[pacman_y]);
   pthread_mutex_unlock(&(player->mutex));
