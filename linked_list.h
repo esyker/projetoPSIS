@@ -19,6 +19,7 @@ int add(struct LinkedList *list, void *data);
 int add_no_lock(struct LinkedList *list, void *data);
 void clear(struct LinkedList *list);
 int removeNode(struct LinkedList *list, void *data);
+int removeNode_no_lock(struct LinkedList *list, void *data);
 void removeFirst(struct LinkedList *list);
 void trasverse(LinkedList* list,void* msg ,void(*function)(void*,void*));
 void trasverse_no_lock(LinkedList* list,void* msg ,void(*function)(void*,void*));

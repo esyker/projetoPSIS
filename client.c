@@ -3,6 +3,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+#include <unistd.h>
 
 #include "client.h"
 #include "UI_library.h"
@@ -37,9 +38,9 @@ void *clientThread(void *arg){
   server_message *event_data;
   SDL_Event new_event;
 
-  printf("just connected to the server\n");
+  //printf("just connected to the server\n");
   while((err_rcv = recv(sock_fd, &msg , sizeof(msg), 0)) >0 ){
-    printf("received %d byte %d %d %d \n", err_rcv, msg.type, msg.x, msg.y);
+    //printf("received %d byte %d %d %d \n", err_rcv, msg.type, msg.x, msg.y);
 
     if (msg.type ==INIT){//first message, board initialization
       size_x = msg.x;
@@ -63,6 +64,13 @@ void *clientThread(void *arg){
         pthread_mutex_unlock(&player.pacman_lock);
       }
     }
+    else if(msg.type==SCOREBOARD){
+      printf("\n  SCOREBOARD\n");
+    }
+    else if(msg.type==SCORE_MSG){
+      printf("PLAYER:%d SCORE:%d\n",msg.player_id,msg.score);
+    }
+
 
     event_data = (server_message*)malloc(sizeof(server_message));
     *event_data = msg;
@@ -109,7 +117,7 @@ int main(int argc , char* argv[]){
     exit(-1);
   }
 
-  printf("connecting to %s %d\n", argv[1], server_addr.sin_port );
+  //printf("connecting to %s %d\n", argv[1], server_addr.sin_port );
 
   if( -1 == connect(sock_fd,
                     (const struct sockaddr *) &server_addr, sizeof(server_addr))){
@@ -125,8 +133,7 @@ int main(int argc , char* argv[]){
   pthread_create(&thread_id, NULL, clientThread, NULL);
 
   while(size_x == 0 && size_y == 0){
-    printf("sleep\n");
-    usleep(20000);
+    sleep(1);
   }
 
   send(sock_fd, &color, sizeof(int), 0);//send color of monsters
@@ -138,9 +145,6 @@ int main(int argc , char* argv[]){
   int x;
   int y;
   int figure_type;
-
-  int x_monster, y_monster;
-  int x_pacman, y_pacman;
 
   while (!done){
     while (SDL_PollEvent(&event)) {
@@ -181,7 +185,7 @@ int main(int argc , char* argv[]){
         else if(figure_type==CHERRY){
             paint_cherry(x,y);//yellow
         }
-        printf("new event received\n");
+        //printf("new event received\n");
       }
       /* SEND TO SERVER*/
       if(event.type == SDL_KEYDOWN){
@@ -231,12 +235,12 @@ int main(int argc , char* argv[]){
         //}
         pthread_mutex_unlock(&player.monster_lock);
       }
-      printf("monster_pos: (%d,%d)\n", player.x_monster,player.y_monster);
-      printf("pacman_pos: (%d,%d)\n", player.x_pacman,player.y_pacman);
+      //printf("monster_pos: (%d,%d)\n", player.x_monster,player.y_monster);
+      //printf("pacman_pos: (%d,%d)\n", player.x_pacman,player.y_pacman);
     }
   }
 
-  printf("fim\n");
+  //printf("fim\n");
   close_board_windows();
   exit(0);
 }

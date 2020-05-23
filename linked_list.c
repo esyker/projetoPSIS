@@ -136,6 +136,40 @@ int removeNode(struct LinkedList *list, void *data)
 	return -1;
 }
 
+// Remove's the first Node whose data matches the parameter, if it exists.
+int removeNode_no_lock(struct LinkedList *list, void *data)
+{
+	int size;
+	struct Node *temp = list->root;
+	while (temp != NULL)
+	{
+		if (temp->data == data)
+		{
+				if(temp==list->root){
+					list->root=temp->next;
+				}
+				if(temp==list->tail){
+					if(temp->next!=NULL)
+						list->tail=temp->next;
+					else
+						list->tail=temp->prev;
+				}
+				if(temp->prev!=NULL){
+					temp->prev->next = temp->next;
+				}
+				if(temp->next!=NULL){
+					temp->next->prev = temp->prev;
+				}
+				free(temp);
+				list->_size--;
+				size=list->_size;
+				return size;
+		}
+		temp = temp->next;
+	}
+	return -1;
+}
+
 // Remove's the first Node in the LinkedList.
 // O(1) complexity.
 void removeFirst(struct LinkedList *list)

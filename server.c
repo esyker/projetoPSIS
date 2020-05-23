@@ -212,16 +212,6 @@ server_message assignRandCoords(player_info* player,int figure_type,int init){
   return output;
 }
 
-void print_board(){
-  for(int i=0;i<game_board.size_x;i++){
-    printf("\n");
-    for(int j=0;j<game_board.size_y;j++)
-    {
-      printf("%d",game_board.array[i][j].figure_type);
-    }
-  }
-}
-
 server_message board_to_message(int x, int y){
   server_message msg;
   msg.type=game_board.array[x][y].figure_type;
@@ -258,7 +248,6 @@ server_message* validate_play_get_answer(client_message input, player_info* play
 
   pthread_mutex_lock(&(player->mutex));
 
-  printf("Entered players mtex\n");
   int new_x=input.x;
   int new_y=input.y;
   int current_x,current_y;
@@ -315,11 +304,8 @@ server_message* validate_play_get_answer(client_message input, player_info* play
     new_y=bounce_y;
   }
 
-  printf("Trying x=%d lock\n",current_x);
   pthread_mutex_lock(&game_board.line_lock[current_x]);
-  printf("Trying y=%d lock\n",current_y);
   pthread_mutex_lock(&game_board.column_lock[current_y]);
-  printf("Trying new player or fruit lock\n");
   if(game_board.array[new_x][new_y].player!=NULL&&game_board.array[new_x][new_y].player!=player){
     pthread_mutex_lock(&game_board.array[new_x][new_y].player->mutex);
     new_player=game_board.array[new_x][new_y].player;
@@ -330,11 +316,9 @@ server_message* validate_play_get_answer(client_message input, player_info* play
     new_fruit=game_board.array[new_x][new_y].fruit;
     fruit_locked=1;
   }
-  printf("Trying x=%d lock\n",new_x);
   if(new_x!=current_x){
     pthread_mutex_lock(&game_board.line_lock[new_x]);
   }
-  printf("Trying y=%d lock\n",new_y);
   if(new_y!=current_y){
     pthread_mutex_lock(&game_board.column_lock[new_y]);
   }
@@ -601,8 +585,6 @@ void * playerInactivity(void * argv){
     else{
       if((player->exit)==1){//player exits
         sem_destroy(&(player->sem_inact));
-        pthread_mutex_destroy(&(player->mutex));
-        free(player);
         return NULL;
       }
       timeout.tv_sec=time(NULL)+8;
@@ -639,7 +621,7 @@ void * fruitGenerator(void * argv){
               output.y=fruit->y;
               free(fruit);
               output.type=EMPTY;
-              send_to_players_no_lock(&output);
+              send_to_players(&output);
               event_data = (server_message*)malloc(sizeof(server_message));
               *event_data = output;
               SDL_zero(new_event);
@@ -716,13 +698,13 @@ void fruit_new_player(LinkedList* players, LinkedList* fruits){
   pthread_mutex_unlock(&(players->mutex));
 }
 
-void fruit_player_disconnect(LinkedList* players, LinkedList* fruits){
-  pthread_mutex_lock(&(players->mutex));
-  pthread_mutex_lock(&(fruits->mutex));
+void fruit_score_player_disconnect(LinkedList* players, LinkedList* fruits){
   removeFirstFruitInfo(fruits);
   removeFirstFruitInfo(fruits);
-  pthread_mutex_unlock(&(fruits->mutex));
-  pthread_mutex_unlock(&(players->mutex));
+  if(players->_size==1){
+    player_info* last_player=(player_info*)players->root->data;
+    last_player->score=0;
+  }
 }
 
 void player_disconect(player_info* player){
@@ -763,14 +745,20 @@ void player_disconect(player_info* player){
   msg.x=pacman_x;
   msg.y=pacman_y;
   *event_data2=msg;
-  removeNode(players,player);
-  fruit_player_disconnect(players,fruits);
+  pthread_mutex_lock(&(players->mutex));
+  pthread_mutex_lock(&(fruits->mutex));
+  removeNode_no_lock(players,player);
+  fruit_score_player_disconnect(players,fruits);
+  pthread_mutex_unlock(&(fruits->mutex));
+  pthread_mutex_unlock(&(players->mutex));
   player->exit=1;
   sem_post(&(player->sem_inact));
   sem_post(&(player->sem_monster_eaten));
   sem_post(&(player->sem_pacman_eaten));
   send_to_players(event_data1);
   send_to_players(event_data2);
+  pthread_mutex_destroy(&(player->mutex));
+  free(player);
   SDL_Event new_event;
   SDL_zero(new_event);
   new_event.type = Event_ShowFigure;
@@ -796,9 +784,7 @@ void * playerThread(void * argv){
   SDL_Event new_event;
   client_message client_msg;
 
-  printf("\nlock on mutex trying\n");
   int client_sock_fd=player->client_fd;
-  printf("%d\n",client_sock_fd);
   int my_color=0;
 
   //establish board size and player_id
@@ -810,7 +796,7 @@ void * playerThread(void * argv){
   send(client_sock_fd, &msg, sizeof(msg), 0);
 
   if((err_rcv = recv(client_sock_fd, &my_color,sizeof(int), 0)) > 0 ){
-    if(my_color<0||my_color>255){
+    if(my_color<0||my_color>360){
         close(client_sock_fd);
         return NULL; //exit?
     }
@@ -843,7 +829,7 @@ void * playerThread(void * argv){
 
   pthread_t thread_id;
   sem_init(&(player->sem_inact),0,0);
-  //pthread_create(&thread_id,NULL,playerInactivity,(void*)player);
+  pthread_create(&thread_id,NULL,playerInactivity,(void*)player);
   //pthread_detach(thread_inact);
   //pthread_create(&thread_id,NULL,fruitGenerator,NULL);
   //pthread_create(&thread_id,NULL,fruitGenerator,(void*)&(player->sem_fruit2));
@@ -858,7 +844,6 @@ void * playerThread(void * argv){
       message_available=2;
     }
     if(message_available>0){
-      printf("received %d byte %d %d %d \n", err_rcv, client_msg.figure_type,client_msg.x,client_msg.y);
       if((result=validate_play_get_answer(client_msg,player))!=NULL){
         send_to_players_2_messages(result);
         SDL_zero(new_event);
@@ -882,10 +867,28 @@ void * playerThread(void * argv){
   player_disconect(player);
   return NULL;
 }
-void send_scores(){
-    pthread_mutex_lock(&(players->mutex));
 
-    pthread_mutex_unlock(&(players->mutex));
+void get_score_send(void* player_inf,void* message){
+  player_info *player=(player_info*)player_inf;
+  server_message* msg=(server_message*)message;
+  msg->type=SCORE_MSG;
+  msg->player_id=player->client_fd;
+  msg->score=player->score;
+  printf("PLAYER:%d SCORE:%d\n",msg->player_id,msg->score);
+  send_to_players_no_lock(msg);
+}
+
+void* scoreThread(void* argv){
+  server_message* msg=(server_message*)malloc(sizeof(server_message));
+  while(1){
+    sleep(7);
+    printf("\n  SCOREBOARD:\n");
+    msg->type=SCOREBOARD;
+    pthread_mutex_lock(&players->mutex);
+    send_to_players_no_lock(msg);
+    trasverse_no_lock(players,msg,get_score_send);
+    pthread_mutex_unlock(&players->mutex);
+  }
 }
 
 void *serverThread(void * argc){
@@ -897,10 +900,10 @@ void *serverThread(void * argc){
 
   pthread_t thread_id;
 
-  int new_size=0;
   int new_client_fd=0;
   player_info* new_player_info;
 
+  pthread_create(&thread_id,NULL,scoreThread,NULL);
 
   while(1){
     //Server waits for a new client to connect
@@ -990,7 +993,6 @@ int main(int argc , char* argv[]){
         x=data_ptr->x;
         y=data_ptr->y;
         color=data_ptr->c;
-        printf("address:%p type:%d x:%d y:%d\n",data_ptr,data_ptr->type,x,y);
         int r,g,b;
         rgb_360(color, &r, &g, &b);
 

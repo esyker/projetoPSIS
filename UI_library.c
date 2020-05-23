@@ -5,8 +5,8 @@ int screen_width;
 int screen_height;
 int n_rows;
 int n_cols;
-	int row_height;
-		int col_width;
+int row_height;
+int col_width;
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
 SDL_Texture *display;
@@ -28,7 +28,7 @@ int create_board_window(int dim_x, int dim_y){
 	screen_height = dim_y *row_height+1;
 
 
-	int i, x, y;
+	int i;
 	if( SDL_Init( SDL_INIT_VIDEO ) < 0 ) {
 		printf( "SDL could not initialize! SDL_Error: %s\n", SDL_GetError() );
 		exit(-1);
@@ -233,7 +233,6 @@ void rgb_360(int angle, int *r,int *g,int *b){
   h = (angle%360)/60.0;
   c = 1;
   x = c * (1 - fabs(fmod(h,2)-1));
-  printf("x: %f\n", x);
   switch(sector){
   case 0:
     *r = (int) (c * 255);
