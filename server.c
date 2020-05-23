@@ -264,11 +264,21 @@ server_message board_to_message(int x, int y){
   return msg;
 }
 
-/*
-server_message* move(int figure_type,int new_x,int new_y,int player_pos){
-  pthread_mutex_lock(&players_mutex);
-  pthread_mutex_unlock(&players_mutex);
-}*/
+server_message change_board(int x, int y,int figure_type,
+  player_info* player,fruit_info* fruit,int color,int id){
+  server_message msg;
+  msg.type=figure_type;
+  msg.x=x;
+  msg.y=y;
+  msg.player_id=id;
+  msg.c=color;
+  game_board.array[x][y].figure_type=figure_type;
+  game_board.array[x][y].color=color;
+  game_board.array[x][y].player_id=id;
+  game_board.array[x][y].player=player;
+  game_board.array[x][y].fruit=fruit;
+  return msg;
+}
 
 int validate_play_get_answer(client_message input, player_info* player){
 
@@ -370,26 +380,10 @@ int validate_play_get_answer(client_message input, player_info* player){
   //CHARACTERS OF THE SAME PLAYER-> CHANGE POSITION
   if(game_board.array[new_x][new_y].player_id==player->client_fd){
     output=(server_message*)malloc(2*sizeof(server_message));
-    msg.type=current_figure;
-    msg.x=new_x;
-    msg.y=new_y;
-    msg.player_id=player->client_fd;
-    msg.c=player->color;
+    msg=change_board(new_x,new_y,current_figure,player,NULL,player->color,player->client_fd);
     output[0]=msg;
-    msg.type=new_figure_type;
-    msg.x=current_x;
-    msg.y=current_y;
-    msg.player_id=player->client_fd;
-    msg.c=player->color;
+    msg=change_board(current_x,current_y,new_figure_type,player,NULL,player->color,player->client_fd);
     output[1]=msg;
-    game_board.array[current_x][current_y].figure_type=new_figure_type;
-    game_board.array[current_x][current_y].color=player->color;
-    game_board.array[current_x][current_y].player_id=player->client_fd;
-    game_board.array[current_x][current_y].player=player;
-    game_board.array[new_x][new_y].figure_type=current_figure;
-    game_board.array[new_x][new_y].color=player->color;
-    game_board.array[new_x][new_y].player_id=player->client_fd;
-    game_board.array[new_x][new_y].player=player;
     int aux1=player->monster_x;
     int aux2=player->monster_y;
     player->monster_x=player->pacman_x;
@@ -402,24 +396,10 @@ int validate_play_get_answer(client_message input, player_info* player){
   //CHARACTER MOVES TO EMPTY POSITION -> CHANGE POSITION
   else if(game_board.array[new_x][new_y].figure_type==EMPTY){
     output=(server_message*)malloc(2*sizeof(server_message));
-    msg.type=EMPTY;
-    msg.x=current_x;
-    msg.y=current_y;
+    msg=change_board(current_x,current_y,EMPTY,NULL,NULL,-1,-1);
     output[0]=msg;
-    msg.type=current_figure;
-    msg.x=new_x;
-    msg.y=new_y;
-    msg.player_id=player->client_fd;
-    msg.c=player->color;
+    msg=change_board(new_x,new_y,current_figure,player,NULL,player->color,player->client_fd);
     output[1]=msg;
-    game_board.array[current_x][current_y].figure_type=EMPTY;
-    game_board.array[current_x][current_y].player_id=-1;
-    game_board.array[current_x][current_y].player=NULL;
-    game_board.array[current_x][current_y].fruit=NULL;
-    game_board.array[new_x][new_y].figure_type=current_figure;
-    game_board.array[new_x][new_y].color=player->color;
-    game_board.array[new_x][new_y].player_id=player->client_fd;
-    game_board.array[new_x][new_y].player=player;
     if(input.figure_type==MONSTER){
       player->monster_x=new_x;
       player->monster_y=new_y;
@@ -437,26 +417,10 @@ int validate_play_get_answer(client_message input, player_info* player){
   (game_board.array[new_x][new_y].figure_type==POWER_PACMAN&&input.figure_type==PACMAN))
   &&(game_board.array[new_x][new_y].player_id!=player->client_fd)){
     output=(server_message*)malloc(2*sizeof(server_message));
-    msg.type=new_figure_type;
-    msg.x=current_x;
-    msg.y=current_y;
-    msg.player_id=new_id;
-    msg.c=new_color;
+    msg=change_board(current_x,current_y,new_figure_type,new_player,NULL,new_color,new_id);
     output[0]=msg;
-    msg.type=current_figure;
-    msg.x=new_x;
-    msg.y=new_y;
-    msg.player_id=player->client_fd;
-    msg.c=player->color;
+    msg=change_board(new_x,new_y,current_figure,player,NULL,player->color,player->client_fd);
     output[1]=msg;
-    game_board.array[new_x][new_y].figure_type=current_figure;
-    game_board.array[new_x][new_y].color=player->color;
-    game_board.array[new_x][new_y].player_id=player->client_fd;
-    game_board.array[new_x][new_y].player=player;
-    game_board.array[current_x][current_y].figure_type=new_figure_type;
-    game_board.array[current_x][current_y].color=new_player->color;
-    game_board.array[current_x][current_y].player_id=new_player->client_fd;
-    game_board.array[current_x][current_y].player=new_player;
     if(input.figure_type==MONSTER){
       player->monster_x=new_x;
       player->monster_y=new_y;
@@ -478,24 +442,10 @@ int validate_play_get_answer(client_message input, player_info* player){
     if(game_board.array[new_x][new_y].figure_type==LEMON||
       game_board.array[new_x][new_y].figure_type==CHERRY){
       output=(server_message*)malloc(2*sizeof(server_message));
-      msg.type=EMPTY;
-      msg.x=current_x;
-      msg.y=current_y;
+      msg=change_board(current_x,current_y,EMPTY,NULL,NULL,-1,-1);
       output[0]=msg;
-      msg.type=POWER_PACMAN;
-      msg.x=new_x;
-      msg.y=new_y;
-      msg.player_id=player->client_fd;
-      msg.c=player->color;
+      msg=change_board(new_x,new_y,POWER_PACMAN,player,NULL,player->color,player->client_fd);
       output[1]=msg;
-      game_board.array[new_x][new_y].figure_type=POWER_PACMAN;
-      game_board.array[new_x][new_y].color=player->color;
-      game_board.array[new_x][new_y].player_id=player->client_fd;
-      game_board.array[new_x][new_y].player=player;
-      game_board.array[current_x][current_y].figure_type=EMPTY;
-      game_board.array[current_x][current_y].player_id=-1;
-      game_board.array[current_x][current_y].player=NULL;
-      game_board.array[current_x][current_y].fruit=NULL;
       player->pacman_x=new_x;
       player->pacman_y=new_y;
       player->score+=1;
@@ -509,31 +459,16 @@ int validate_play_get_answer(client_message input, player_info* player){
       output=(server_message*)malloc(2*sizeof(server_message));
       if(player->super_powered_pacman){
         player->monster_eat_count--;
-        msg.type=EMPTY;
-        msg.x=current_x;
-        msg.y=current_y;
+        msg=change_board(current_x,current_y,EMPTY,NULL,NULL,-1,-1);
         output[0]=msg;
-        msg.x=new_x;
-        msg.y=new_y;
-        msg.player_id=player->client_fd;
-        msg.c=player->color;
         if(player->monster_eat_count==0){
-          msg.type=PACMAN;
-          game_board.array[new_x][new_y].figure_type=PACMAN;
+          msg=change_board(new_x,new_y,PACMAN,player,NULL,player->color,player->client_fd);
           player->super_powered_pacman=0;
         }
         else{
-          msg.type=POWER_PACMAN;
-          game_board.array[new_x][new_y].figure_type=POWER_PACMAN;
+          msg=change_board(new_x,new_y,POWER_PACMAN,player,NULL,player->color,player->client_fd);
         }
         output[1]=msg;
-        game_board.array[new_x][new_y].color=player->color;
-        game_board.array[new_x][new_y].player_id=player->client_fd;
-        game_board.array[new_x][new_y].player=player;
-        game_board.array[current_x][current_y].figure_type=EMPTY;
-        game_board.array[current_x][current_y].player_id=-1;
-        game_board.array[current_x][current_y].fruit=NULL;
-        game_board.array[current_x][current_y].player=NULL;
         player->pacman_x=new_x;
         player->pacman_y=new_y;
         player->score+=1;
@@ -541,15 +476,9 @@ int validate_play_get_answer(client_message input, player_info* player){
         sem_post(&(new_player->sem_monster_eaten));
       }
       else{
-        msg.type=EMPTY;
-        msg.x=current_x;
-        msg.y=current_y;
+        msg=change_board(current_x,current_y,EMPTY,NULL,NULL,-1,-1);
         output[0]=msg;
         output[1]=msg;
-        game_board.array[current_x][current_y].figure_type=EMPTY;
-        game_board.array[current_x][current_y].player_id=-1;
-        game_board.array[current_x][current_y].player=NULL;
-        game_board.array[current_x][current_y].fruit=NULL;
         player->pacman_eaten=1;
         new_player->score+=1;
         sem_post(&(player->sem_pacman_eaten));
@@ -563,57 +492,30 @@ int validate_play_get_answer(client_message input, player_info* player){
     if(game_board.array[new_x][new_y].figure_type==LEMON||
       game_board.array[new_x][new_y].figure_type==CHERRY){
       output=(server_message*)malloc(2*sizeof(server_message));
-      msg.type=EMPTY;
-      msg.x=current_x;
-      msg.y=current_y;
+      msg=change_board(current_x,current_y,EMPTY,NULL,NULL,-1,-1);
       output[0]=msg;
-      msg.type=MONSTER;
-      msg.x=new_x;
-      msg.y=new_y;
-      msg.player_id=player->client_fd;
-      msg.c=player->color;
+      msg=change_board(new_x,new_y,MONSTER,player,NULL,player->color,player->client_fd);
       output[1]=msg;
-      game_board.array[new_x][new_y].figure_type=MONSTER;
-      game_board.array[new_x][new_y].color=player->color;
-      game_board.array[new_x][new_y].player_id=player->client_fd;
-      game_board.array[new_x][new_y].player=player;
-      game_board.array[current_x][current_y].figure_type=EMPTY;
-      game_board.array[current_x][current_y].player_id=-1;
-      game_board.array[current_x][current_y].player=NULL;
-      game_board.array[current_x][current_y].fruit=NULL;
       player->monster_x=new_x;
       player->monster_y=new_y;
       player->score+=1;
       sem_post(&(new_fruit->sem_fruit));
       send_message=1;
     }
-
     //MONSTER AGAINST SUPERPOWERED PACMAN -> MONSTER EATEN AND MOVED TO RANDOM POSITION, OPPONENT SCORE INCREASES
     else if(game_board.array[new_x][new_y].figure_type==POWER_PACMAN){
       output=(server_message*)malloc(2*sizeof(server_message));
-      msg.type=EMPTY;
-      msg.x=current_x;
-      msg.y=current_y;
+      msg=change_board(current_x,current_y,EMPTY,NULL,NULL,-1,-1);
       output[0]=msg;
       new_player->monster_eat_count--;
-      msg.x=new_x;
-      msg.y=new_y;
-      msg.player_id=new_player->client_fd;
-      msg.c=new_player->color;
       if(new_player->monster_eat_count==0){
-        msg.type=PACMAN;
-        game_board.array[new_x][new_y].figure_type=PACMAN;
+        msg=change_board(new_x,new_y,PACMAN,new_player,NULL,new_player->color,new_player->client_fd);
         player->super_powered_pacman=0;
       }
       else{
-        msg.type=POWER_PACMAN;
-        game_board.array[new_x][new_y].figure_type=POWER_PACMAN;
+        msg=change_board(new_x,new_y,POWER_PACMAN,new_player,NULL,new_player->color,new_player->client_fd);
       }
       output[1]=msg;
-      game_board.array[current_x][current_y].figure_type=EMPTY;
-      game_board.array[current_x][current_y].player_id=-1;
-      game_board.array[current_x][current_y].player=NULL;
-      game_board.array[current_x][current_y].fruit=NULL;
       player->monster_eaten=1;
       new_player->score+=1;
       sem_post(&(player->sem_monster_eaten));
@@ -622,24 +524,10 @@ int validate_play_get_answer(client_message input, player_info* player){
     //MONSTER AGAINST NORMAL PACMAN -> PACMAN EATEN AND MOVED TO RANDOM POSITION, SCORE INCREASES
     else if(game_board.array[new_x][new_y].figure_type==PACMAN){
       output=(server_message*)malloc(2*sizeof(server_message));
-      msg.type=EMPTY;
-      msg.x=current_x;
-      msg.y=current_y;
+      msg=change_board(current_x,current_y,EMPTY,NULL,NULL,-1,-1);
       output[0]=msg;
-      msg.type=MONSTER;
-      msg.x=new_x;
-      msg.y=new_y;
-      msg.player_id=player->client_fd;
-      msg.c=player->color;
+      msg=change_board(new_x,new_y,MONSTER,player,NULL,player->color,player->client_fd);
       output[1]=msg;
-      game_board.array[new_x][new_y].figure_type=MONSTER;
-      game_board.array[new_x][new_y].color=player->color;
-      game_board.array[new_x][new_y].player_id=player->client_fd;
-      game_board.array[new_x][new_y].player=player;
-      game_board.array[current_x][current_y].figure_type=EMPTY;
-      game_board.array[current_x][current_y].player_id=-1;
-      game_board.array[current_x][current_y].player=NULL;
-      game_board.array[current_x][current_y].fruit=NULL;
       player->monster_x=new_x;
       player->monster_y=new_y;
       player->score+=1;
@@ -647,7 +535,6 @@ int validate_play_get_answer(client_message input, player_info* player){
       sem_post(&(new_player->sem_pacman_eaten));
       send_message=1;
     }
-
   }
   pthread_mutex_unlock(&game_board.line_lock[current_x]);
   pthread_mutex_unlock(&game_board.column_lock[current_y]);
