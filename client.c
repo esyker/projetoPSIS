@@ -157,17 +157,20 @@ int main(int argc , char* argv[]){
         y = data_ptr->y;
         color = data_ptr->c;
 
+        int r,g,b;
+        rgb_360(color, &r, &g, &b);
+
         if(figure_type==EMPTY){
           clear_place(x,y);
         }
         else if(figure_type==MONSTER){
-          paint_monster(x, y,color,color,color);
+          paint_monster(x, y, r, g, b);
         }
         else if(figure_type==PACMAN){
-          paint_pacman(x, y ,color,color,color);
+          paint_pacman(x, y, r, g, b);
         }
         else if(figure_type==POWER_PACMAN){
-          paint_powerpacman(x,y,color,color,color);
+          paint_powerpacman(x,y, r, g, b);
         }
         else if(figure_type==BRICK){
           paint_brick(x,y);//orange

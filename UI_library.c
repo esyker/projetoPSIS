@@ -225,3 +225,50 @@ void get_board_place(int mouse_x, int mouse_y, int * board_x, int *board_y){
 	*board_x = mouse_x / col_width;
 	*board_y = mouse_y / row_height;
 }
+
+void rgb_360(int angle, int *r,int *g,int *b){
+  int sector = (angle%360)/60;
+  double x, c, h;
+
+  h = (angle%360)/60.0;
+  c = 1;
+  x = c * (1 - fabs(fmod(h,2)-1));
+  printf("x: %f\n", x);
+  switch(sector){
+  case 0:
+    *r = (int) (c * 255);
+    *g = (int) (x * 255);
+    *b = (int) 0;
+    break;
+  case 1:
+    *r = (int) (x * 255);
+    *g = (int) (c * 255);
+    *b = (int) 0;
+    break;
+  case 2:
+    *r = 0;
+    *g = (int) (c * 255);
+    *b = (int) (x * 255);
+    break;
+  case 3:
+    *r = 0;
+    *g = (int) (x * 255);
+    *b = (int) (c * 255);
+    break;
+  case 4:
+    *r = (int) (x * 255);
+    *g = 0;
+    *b = (int) (c * 255);
+    break;
+  case 5:
+    *r = (int) (c * 255);
+    *g = 0;
+    *b = (int) (x * 255);
+    break;
+  default:
+    *r = 0;
+    *g = 0;
+    *b = 0;
+  }
+  return;
+}
