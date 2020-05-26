@@ -21,6 +21,7 @@ void clear(struct LinkedList *list);
 int removeNode(struct LinkedList *list, void *data);
 int removeNode_no_lock(struct LinkedList *list, void *data);
 void removeFirst(struct LinkedList *list);
+void destroy(struct LinkedList *list,void (*destroyDataFunc)(void* data));
 void trasverse(LinkedList* list,void* msg ,void(*function)(void*,void*));
 void trasverse_no_lock(LinkedList* list,void* msg ,void(*function)(void*,void*));
 void* findby(LinkedList* list,int(*function)(void*,void*), void* condition);

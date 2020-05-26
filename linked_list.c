@@ -242,18 +242,20 @@ void custom_operation(LinkedList* list, void (*operation)(LinkedList* list)){
 }
 
 
-/*
-void destroy(struct LinkedList *list)
+
+void destroy(struct LinkedList *list,void (*destroyDataFunc)(void* data))
 {
+	pthread_mutex_destroy(&list->mutex);
   Node * current = list->root;
   Node * next = current;
   while(current != NULL){
     next = current->next;
-    free(current);
+		destroyDataFunc(current->data);
+		free(current);
     current = next;
   }
   free(list);
-}*/
+}
 
 /*
 // Prints out the LinkedList to the terminal window.

@@ -17,10 +17,6 @@
 #include "linked_list.h"
 
 //gcc server.c linked_list.c UI_library.c -o server -lSDL2 -lSDL2_image -lpthread -Wall -g
-//sudo ss -tulwn | grep LISTEN
-//sudo ufw deny 8080
-//sudo ufw allow 8080
-//netstat -tulpn
 
 Uint32 Event_ShowFigure;
 int sock_fd;
@@ -28,11 +24,17 @@ int server_socket;
 LinkedList* players;
 LinkedList *fruits;
 
-int currSize=1;
-int currPlayerCount=0;
 board game_board;
 int color;
 
+/*******************************************************************************/
+/*******                   LIST OPERATIONS                         *************/
+/*****************************************************************************/
+/*****************************************************************************/
+/*   THIS MODULE CONTAINS                                                    */
+/*    AUXILIARY FUNCTIONS TO OVERRIDE LIST OPERATIONS                       */
+/*    THAT ARE SPECIFIC TO THIS PROJECT,  SUCH AS TRASVERSE OR NODE REMOVAL*/
+/****************************************************************************/
 
 void send_to_player(void* data , void *msg){
   player_info player = (*(player_info*)data);
@@ -90,6 +92,14 @@ void removeFirstFruitInfo(LinkedList* list){
 
 }
 
+/********************************************************************/
+/********************************************************************/
+/*                      BOARD FUNCTIONS                             */
+/********************************************************************/
+/*********************************************************************/
+/* THIS MODULE IS RELATED TO LOADING BOARD,  DESTROYING BOARD AND   */
+/* BOARD LOGIC                                                       */
+/*********************************************************************/
 void load_board(char * file_name){
 
   FILE *fptr;
@@ -151,6 +161,22 @@ void load_board(char * file_name){
 
 }
 
+void destroyBoard(){
+  for(int i=0;i<game_board.size_x;i++){
+    pthread_mutex_destroy(&game_board.line_lock[i]);
+  }
+  free(game_board.line_lock);
+  for(int i=0;i<game_board.size_y;i++){
+    pthread_mutex_destroy(&game_board.column_lock[i]);
+  }
+  free(game_board.column_lock);
+
+  for(int i=0;i<game_board.size_x;i++){
+    free(game_board.array[i]);
+  }
+  free(game_board.array);
+}
+
 server_message assignRandCoords(player_info* player,int figure_type,int init){
   int color,player_id;
 
@@ -158,8 +184,6 @@ server_message assignRandCoords(player_info* player,int figure_type,int init){
   player_id=player->client_fd;
 
   int i,j;
-  //pthread_mutex_lock(&(player->mutex));
-  //lock_player_mutex(player,init);
   while(1){
     i=rand()%game_board.size_x;
     j=rand()%game_board.size_y;
@@ -193,7 +217,6 @@ server_message assignRandCoords(player_info* player,int figure_type,int init){
     player->pacman_y=j;
     player->pacman_eaten=0;
   }
-  //unlock_player_mutex(player,init);
   server_message output;
   output.type=figure_type;
   output.x=i;
@@ -502,96 +525,55 @@ server_message* validate_play_get_answer(client_message input, player_info* play
   return NULL;
 }
 
-void * monsterEaten(void * argv){
-  player_info* player =(player_info*) argv;
-  server_message msg;
+/*******************************************************************/
+/*******************************************************************/
+/*                            SCORE FUNCTIONS                      */
+/*******************************************************************/
+/*******************************************************************/
+/*      FUNCTIONS USED TO SEND SCORE                               */
+/*******************************************************************/
 
-  while(1){
-    if(sem_wait(&(player->sem_monster_eaten))==0){
-      if((player->exit)==1){//player exits
-        return NULL;
-      }
-      pthread_mutex_lock(&player->mutex);
-      msg=assignRandCoords(player,MONSTER,NOT_INIT);
-      pthread_mutex_unlock(&player->mutex);
-      send_to_players(&msg);
-    }
-  }
-  return NULL;
+void get_score_send(void* player_inf,void* message){
+  player_info *player=(player_info*)player_inf;
+  server_message* msg=(server_message*)message;
+  msg->type=SCORE_MSG;
+  msg->player_id=player->client_fd;
+  msg->score=player->score;
+  printf("PLAYER:%d SCORE:%d\n",msg->player_id,msg->score);
+  send_to_players_no_lock(msg);
 }
 
-void * pacmanEaten(void * argv){
-  player_info* player =(player_info*) argv;
-  server_message msg;
-
+void* scoreThread(void* argv){
+  server_message* msg=(server_message*)malloc(sizeof(server_message));
   while(1){
-    if(sem_wait(&(player->sem_pacman_eaten))==0){
-      if((player->exit)==1){//player exits
-        return NULL;
-      }
-      pthread_mutex_lock(&player->mutex);
-      msg=assignRandCoords(player,PACMAN,NOT_INIT);
-      pthread_mutex_unlock(&player->mutex);
-      send_to_players(&msg);
-    }
+    sleep(7);
+    printf("\n  SCOREBOARD:\n");
+    msg->type=SCOREBOARD;
+    pthread_mutex_lock(&players->mutex);
+    send_to_players_no_lock(msg);
+    trasverse_no_lock(players,msg,get_score_send);
+    pthread_mutex_unlock(&players->mutex);
   }
-  return NULL;
 }
 
-void * playerInactivity(void * argv){
-  player_info* player =(player_info*) argv;
-  server_message msg1,msg2;
-  struct timespec timeout;
-  timeout.tv_sec=time(NULL)+8;
-  timeout.tv_nsec=0;
+/*******************************************************************/
+/*******************************************************************/
+/***                 FRUIT RELATED FUNCTIONS                       **/
+/*******************************************************************/
+/*******************************************************************/
+/**     FUNCTIONS USED FOR THREADS                                 */
+/*     SUCH AS PLAYER THREAD OR SERVER THREAD                      */
+/*    OR THREADS THAT ASSIGN NEW POSITION WHEN THE MONSTER OR PACMAN*/
+/*    ARE EATEN                                                      */
+/*********************************************************************/
 
-  int pacman_x, pacman_y;
-  SDL_Event new_event;
-  server_message* event_data;
-  int current_figure;
-
-  while(1){
-    if(sem_timedwait(&(player->sem_inact),&timeout)==-1){
-        if(errno==ETIMEDOUT){
-          SDL_zero(new_event);
-          new_event.type = Event_ShowFigure;
-          //lock_player_mutex(player,0);
-          pthread_mutex_lock(&(player->mutex));
-          pacman_x=player->pacman_x;
-          pacman_y=player->pacman_y;
-          msg1.type=EMPTY;
-          msg1.x=pacman_x;
-          msg1.y=pacman_y;
-          pthread_mutex_lock(&(game_board.line_lock[player->pacman_x]));
-          pthread_mutex_lock(&(game_board.column_lock[player->pacman_y]));
-          current_figure=game_board.array[pacman_x][pacman_y].figure_type;
-          game_board.array[pacman_x][pacman_y].figure_type=EMPTY;
-          game_board.array[pacman_x][pacman_y].player_id=-1;
-          game_board.array[pacman_x][pacman_y].player=NULL;
-          game_board.array[pacman_x][pacman_y].fruit=NULL;
-          pthread_mutex_unlock(&(game_board.line_lock[player->pacman_x]));
-          pthread_mutex_unlock(&(game_board.column_lock[player->pacman_y]));
-          event_data=(server_message*)malloc(sizeof(server_message));
-          *event_data=msg1;
-          new_event.user.data1 = event_data;
-          SDL_PushEvent(&new_event);
-          send_to_players(&msg1);
-          msg2=assignRandCoords(player,current_figure,NOT_INIT);
-          pthread_mutex_unlock(&(player->mutex));
-          send_to_players(&msg2);
-          timeout.tv_sec=time(NULL)+8;
-        }
-    }
-    else{
-      if((player->exit)==1){//player exits
-        sem_destroy(&(player->sem_inact));
-        return NULL;
-      }
-      timeout.tv_sec=time(NULL)+8;
-    }
+void fruit_score_player_disconnect(LinkedList* players, LinkedList* fruits){
+  removeFirstFruitInfo(fruits);
+  removeFirstFruitInfo(fruits);
+  if(players->_size==1){
+    player_info* last_player=(player_info*)players->root->data;
+    last_player->score=0;
   }
-
-  return NULL;
 }
 
 void * fruitGenerator(void * argv){
@@ -698,14 +680,16 @@ void fruit_new_player(LinkedList* players, LinkedList* fruits){
   pthread_mutex_unlock(&(players->mutex));
 }
 
-void fruit_score_player_disconnect(LinkedList* players, LinkedList* fruits){
-  removeFirstFruitInfo(fruits);
-  removeFirstFruitInfo(fruits);
-  if(players->_size==1){
-    player_info* last_player=(player_info*)players->root->data;
-    last_player->score=0;
-  }
-}
+/*******************************************************************/
+/*******************************************************************/
+/***                 PLAYER RELATED FUNCTIONS                       **/
+/*******************************************************************/
+/*******************************************************************/
+/**     FUNCTIONS USED FOR THREADS                                 */
+/*     SUCH AS PLAYER THREAD OR SERVER THREAD                      */
+/*    OR THREADS THAT ASSIGN NEW POSITION WHEN THE MONSTER OR PACMAN*/
+/*    ARE EATEN                                                      */
+/*********************************************************************/
 
 void player_disconect(player_info* player){
   server_message* event_data1, *event_data2;
@@ -715,8 +699,6 @@ void player_disconect(player_info* player){
 
   int monster_x,monster_y,pacman_x,pacman_y;
   pthread_mutex_lock(&(player->mutex));
-  //players[player_pos].active=0;//client exited;
-  //currPlayerCount--;
   monster_x=player->monster_x;
   monster_y=player->monster_y;
   pacman_x=player->pacman_x;
@@ -758,6 +740,7 @@ void player_disconect(player_info* player){
   send_to_players(event_data1);
   send_to_players(event_data2);
   pthread_mutex_destroy(&(player->mutex));
+  close(player->client_fd);
   free(player);
   SDL_Event new_event;
   SDL_zero(new_event);
@@ -769,6 +752,98 @@ void player_disconect(player_info* player){
   new_event.user.data1 = event_data2;
   SDL_PushEvent(&new_event);
   return;
+}
+
+void * monsterEaten(void * argv){
+  player_info* player =(player_info*) argv;
+  server_message msg;
+
+  while(1){
+    if(sem_wait(&(player->sem_monster_eaten))==0){
+      if((player->exit)==1){//player exits
+        return NULL;
+      }
+      pthread_mutex_lock(&player->mutex);
+      msg=assignRandCoords(player,MONSTER,NOT_INIT);
+      pthread_mutex_unlock(&player->mutex);
+      send_to_players(&msg);
+    }
+  }
+  return NULL;
+}
+
+void * pacmanEaten(void * argv){
+  player_info* player =(player_info*) argv;
+  server_message msg;
+
+  while(1){
+    if(sem_wait(&(player->sem_pacman_eaten))==0){
+      if((player->exit)==1){//player exits
+        return NULL;
+      }
+      pthread_mutex_lock(&player->mutex);
+      msg=assignRandCoords(player,PACMAN,NOT_INIT);
+      pthread_mutex_unlock(&player->mutex);
+      send_to_players(&msg);
+    }
+  }
+  return NULL;
+}
+
+void * playerInactivity(void * argv){
+  player_info* player =(player_info*) argv;
+  server_message msg1,msg2;
+  struct timespec timeout;
+  timeout.tv_sec=time(NULL)+8;
+  timeout.tv_nsec=0;
+
+  int pacman_x, pacman_y;
+  SDL_Event new_event;
+  server_message* event_data;
+  int current_figure;
+
+  while(1){
+    if(sem_timedwait(&(player->sem_inact),&timeout)==-1){
+        if(errno==ETIMEDOUT){
+          SDL_zero(new_event);
+          new_event.type = Event_ShowFigure;
+          //lock_player_mutex(player,0);
+          pthread_mutex_lock(&(player->mutex));
+          pacman_x=player->pacman_x;
+          pacman_y=player->pacman_y;
+          msg1.type=EMPTY;
+          msg1.x=pacman_x;
+          msg1.y=pacman_y;
+          pthread_mutex_lock(&(game_board.line_lock[player->pacman_x]));
+          pthread_mutex_lock(&(game_board.column_lock[player->pacman_y]));
+          current_figure=game_board.array[pacman_x][pacman_y].figure_type;
+          game_board.array[pacman_x][pacman_y].figure_type=EMPTY;
+          game_board.array[pacman_x][pacman_y].player_id=-1;
+          game_board.array[pacman_x][pacman_y].player=NULL;
+          game_board.array[pacman_x][pacman_y].fruit=NULL;
+          pthread_mutex_unlock(&(game_board.line_lock[player->pacman_x]));
+          pthread_mutex_unlock(&(game_board.column_lock[player->pacman_y]));
+          event_data=(server_message*)malloc(sizeof(server_message));
+          *event_data=msg1;
+          new_event.user.data1 = event_data;
+          SDL_PushEvent(&new_event);
+          send_to_players(&msg1);
+          msg2=assignRandCoords(player,current_figure,NOT_INIT);
+          pthread_mutex_unlock(&(player->mutex));
+          send_to_players(&msg2);
+          timeout.tv_sec=time(NULL)+8;
+        }
+    }
+    else{
+      if((player->exit)==1){//player exits
+        sem_destroy(&(player->sem_inact));
+        return NULL;
+      }
+      timeout.tv_sec=time(NULL)+8;
+    }
+  }
+
+  return NULL;
 }
 
 //SERVER THREADs
@@ -830,9 +905,6 @@ void * playerThread(void * argv){
   pthread_t thread_id;
   sem_init(&(player->sem_inact),0,0);
   pthread_create(&thread_id,NULL,playerInactivity,(void*)player);
-  //pthread_detach(thread_inact);
-  //pthread_create(&thread_id,NULL,fruitGenerator,NULL);
-  //pthread_create(&thread_id,NULL,fruitGenerator,(void*)&(player->sem_fruit2));
   sem_init(&(player->sem_monster_eaten),0,0);
   pthread_create(&thread_id,NULL,monsterEaten,(void*)player);
   sem_init(&(player->sem_pacman_eaten),0,0);
@@ -868,29 +940,6 @@ void * playerThread(void * argv){
   return NULL;
 }
 
-void get_score_send(void* player_inf,void* message){
-  player_info *player=(player_info*)player_inf;
-  server_message* msg=(server_message*)message;
-  msg->type=SCORE_MSG;
-  msg->player_id=player->client_fd;
-  msg->score=player->score;
-  printf("PLAYER:%d SCORE:%d\n",msg->player_id,msg->score);
-  send_to_players_no_lock(msg);
-}
-
-void* scoreThread(void* argv){
-  server_message* msg=(server_message*)malloc(sizeof(server_message));
-  while(1){
-    sleep(7);
-    printf("\n  SCOREBOARD:\n");
-    msg->type=SCOREBOARD;
-    pthread_mutex_lock(&players->mutex);
-    send_to_players_no_lock(msg);
-    trasverse_no_lock(players,msg,get_score_send);
-    pthread_mutex_unlock(&players->mutex);
-  }
-}
-
 void *serverThread(void * argc){
   struct sockaddr_in client_addr;
   socklen_t size_addr = sizeof(client_addr);
@@ -917,7 +966,7 @@ void *serverThread(void * argc){
      new_player_info->exit=0;
      new_player_info->score=0;
      if (pthread_mutex_init(&(new_player_info->mutex), NULL) != 0) {
-           printf("\n plyaer mutex init has failed\n");
+           printf("\n player mutex init has failed\n");
            exit(-1);
      }
      add(players,(void*)new_player_info);
@@ -928,6 +977,45 @@ void *serverThread(void * argc){
   }
   return (NULL);
 }
+
+/******************************************************/
+/*****************************************************/
+/*              FUNCTIONS USED TO FREE MEMORY AND EXIT */
+/******************************************************/
+/******************************************************/
+
+void destroyPlayer(void* _player){
+  player_info* player= (player_info*)_player;
+  pthread_mutex_destroy(&(player->mutex));
+  close(player->client_fd);
+  player->exit=1;
+  sem_post(&(player->sem_monster_eaten));
+  sem_post(&(player->sem_pacman_eaten));
+  sem_post(&player->sem_inact);
+  free(player);
+}
+
+void destroyFruit(void* _fruit){
+  fruit_info* fruit= (fruit_info*)_fruit;
+  pthread_mutex_destroy(&(fruit->mutex));
+  fruit->exit=1;
+  sem_post(&fruit->sem_fruit);
+}
+
+void free_game_memory(){
+  destroy(players,destroyPlayer);
+  destroy(fruits,destroyFruit);
+  destroyBoard();
+}
+
+/*****************************************************/
+/******************************************************/
+/*               MAIN THREAD                          */
+/********************************************************/
+/*********************************************************/
+/**********************************************************/
+/* INITIALIZES OTHER THREADS AND RENDERS GRAPHICS         */
+
 
 int main(int argc , char* argv[]){
 
@@ -1022,6 +1110,7 @@ int main(int argc , char* argv[]){
     }
   }
 
+  free_game_memory();
   printf("fim\n");
   close_board_windows();
   exit(0);
