@@ -196,6 +196,20 @@ void removeFirst(struct LinkedList *list)
 	pthread_mutex_unlock(&(list->mutex));
 }
 
+void destroy(struct LinkedList *list,void (*destroyDataFunc)(void* data))
+{
+	pthread_mutex_destroy(&list->mutex);
+  Node * current = list->root;
+  Node * next = current;
+  while(current != NULL){
+    next = current->next;
+		destroyDataFunc(current->data);
+		free(current);
+    current = next;
+  }
+  free(list);
+}
+
 void trasverse(LinkedList* list,void* msg ,void(*function)(void*,void*)){
 	pthread_mutex_lock(&list->mutex);
 
@@ -240,210 +254,3 @@ void custom_operation(LinkedList* list, void (*operation)(LinkedList* list)){
   pthread_mutex_unlock(&(list->mutex));
   return;
 }
-
-
-
-void destroy(struct LinkedList *list,void (*destroyDataFunc)(void* data))
-{
-	pthread_mutex_destroy(&list->mutex);
-  Node * current = list->root;
-  Node * next = current;
-  while(current != NULL){
-    next = current->next;
-		destroyDataFunc(current->data);
-		free(current);
-    current = next;
-  }
-  free(list);
-}
-
-/*
-// Prints out the LinkedList to the terminal window.
-// O(n) complexity.
-void print(struct LinkedList *list)
-{
-	printf("%c", '{');
-
-	struct Node *temp = list->root;
-	while (temp != NULL)
-	{
-		printf(" %s", temp->data);
-		if (temp->next != NULL)
-			printf("%c", ',');
-		temp = temp->next;
-	}
-
-	printf(" }\n");
-}*/
-
-/*
-
-
-
-// Inserts a Node at a given index inside the LinkedList.
-int addAt(struct LinkedList *list, unsigned int index, void *data)
-{
-	if (index > list->_size)
-	{
-		fprintf(stderr, "%s%d%s%lu%c\n",
-			"Error: Index Out of Bounds. Index was '",
-			index, "\' but size is ", list->_size, '.');
-		return 1;
-	}
-	else if (index == 0)
-		add(list, data);
-	else if (index == list->_size)
-		addLast(list, data);
-	else
-	{
-		struct Node *temp = find(list, index),
-			*added = constructNode(data);
-		pthread_mutex_lock(&added->mutex);
-		pthread_mutex_lock(&temp->mutex);
-		added->prev = temp->prev;
-		added->next = temp;
-		temp->prev->next = added;
-		temp->prev = added;
-		pthread_mutex_unlock(&temp->mutex);
-		pthread_mutex_unlock(&added->mutex);
-		list->_size++;
-	}
-
-	return 0;
-}
-
-// Inserts a Node at the end of the LinkedList.
-// O(1) complexity.
-void addLast(struct LinkedList *list, void *data)
-{
-	Node* aux;
-	if (list->_size == 0)
-		add(list, data);
-	else
-	{
-		struct Node *added = constructNode(data);
-		pthread_mutex_lock(&added->mutex);
-		added->prev = list->tail;
-		pthread_mutex_lock(&list->tail->mutex);
-		list->tail->next = added;
-		aux=list->tail;
-		list->tail = added;
-		list->_size++;
-		pthread_mutex_unlock(&aux->mutex);
-		pthread_mutex_unlock(&added->mutex);
-	}
-}
-*/
-
-/*
-
-// Remove's the last Node in the LinkedList.
-// O(1) complexity.
-void removeLast(struct LinkedList *list)
-{
-	Node* aux;
-	if (list->_size > 0)
-	{
-		if (list->_size == 1)
-			clear(list);
-		else
-		{
-			pthread_mutex_lock(&list->tail->mutex);
-			pthread_mutex_lock(&list->tail->prev->mutex);
-			aux=list->tail;
-			list->tail = list->tail->prev;
-			list->tail->next = NULL;
-			list->_size--;
-			pthread_mutex_unlock(&list->tail->mutex);
-			freeNode(aux);
-		}
-	}
-}
-
-*/
-
-/*
-
-// Remove's a Node at a given index.
-int removeAt(struct LinkedList *list, unsigned int index)
-{
-	if (index >= list->_size)
-	{
-		fprintf(stderr, "%s%d%s%lu%c\n",
-			"Error: Index Out of Bounds. Index was '",
-			index, "\' but size is ", list->_size, '.');
-		return 1;
-	}
-	else if (index == 0)
-		removeFirst(list);
-	else if (index == list->_size - 1)
-		removeLast(list);
-	else
-	{
-		struct Node *temp = find(list, index);
-		pthread_mutex_lock(&temp->mutex);
-		temp->prev->next = temp->next;
-		temp->next->prev = temp->prev;
-		freeNode(temp);
-		list->_size--;
-	}
-
-	return 0;
-}
-
-*/
-
-/*
-
-// Locates a Node within the LinkedList based on the index.
-struct Node* find(struct LinkedList *list, unsigned int index)
-{
-	pthread_mutex_t* temp_mutex;
-	if (index > list->_size)
-		fprintf(stderr, "%s%d%s%lu%c\n",
-			"Error: Index Out of Bounds. Index was '",
-			index, "\' but size is ", list->_size, '.');
-	else if (list->_size > 0)
-	{
-		if (index == 0)
-			return list->root;
-		else if (index == list->_size - 1)
-			return list->tail;
-		else
-		{
-			struct Node *temp;
-
-			if ((double)index / list->_size > 0.5)
-			{
-				// Seek from the tail.
-				pthread_mutex_lock(&list->tail->mutex);
-				temp = list->tail;
-				temp_mutex=&list->tail->mutex;
-				for (unsigned int i = list->_size - 1; i > index; i--){
-					pthread_mutex_lock(&temp->prev->mutex);
-					temp = temp->prev;
-					pthread_mutex_unlock(temp_mutex);
-					temp_mutex=&temp->mutex;
-				}
-			}
-			else
-			{
-				// Seek from the root.
-				pthread_mutex_lock(&list->root->mutex);
-				temp = list->root;
-				temp_mutex=&list->root->mutex;
-				for (unsigned int i = 0; i < index; i++){
-					pthread_mutex_lock(&temp->next->mutex);
-					temp = temp->next;
-					pthread_mutex_unlock(temp_mutex);
-					temp_mutex=&temp->mutex;
-				}
-				pthread_mutex_unlock(temp_mutex);
-			}
-			return temp;
-		}
-	}
-	return NULL;
-}
-
-*/

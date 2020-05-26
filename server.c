@@ -19,13 +19,11 @@
 //gcc server.c linked_list.c UI_library.c -o server -lSDL2 -lSDL2_image -lpthread -Wall -g
 
 Uint32 Event_ShowFigure;
-int sock_fd;
 int server_socket;
 LinkedList* players;
 LinkedList *fruits;
-
 board game_board;
-int color;
+
 
 /*******************************************************************************/
 /*******                   LIST OPERATIONS                         *************/
@@ -1065,9 +1063,7 @@ int main(int argc , char* argv[]){
   pthread_create(&thread_id, NULL, serverThread, NULL);
 
 
-  int x;
-  int y;
-  int figure_type;
+  int x,y,figure_type,color;
 
   while (!done){
     while (SDL_PollEvent(&event)) {
