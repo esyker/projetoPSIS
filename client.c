@@ -13,8 +13,6 @@
 
 Uint32 Event_ShowFigure;
 int sock_fd;
-int server_socket;
-int currSize=10;
 int color; //add a hsv to rgb converter
 int size_x = 0;
 int size_y = 0;
@@ -38,9 +36,7 @@ void *clientThread(void *arg){
   server_message *event_data;
   SDL_Event new_event;
 
-  //printf("just connected to the server\n");
   while((err_rcv = recv(sock_fd, &msg , sizeof(msg), 0)) >0 ){
-    //printf("received %d byte %d %d %d \n", err_rcv, msg.type, msg.x, msg.y);
 
     if (msg.type ==INIT){//first message, board initialization
       size_x = msg.x;
@@ -82,6 +78,13 @@ void *clientThread(void *arg){
   return (NULL);
 }
 
+void close_sockets_exit(){
+  close(sock_fd);
+  close_board_windows();
+  printf("EXITED SUCCESSFULLY!\n");
+  exit(0);
+}
+
 int main(int argc , char* argv[]){
 
   SDL_Event event;
@@ -116,8 +119,6 @@ int main(int argc , char* argv[]){
     printf("argv[1]is not a valid address\n");
     exit(-1);
   }
-
-  //printf("connecting to %s %d\n", argv[1], server_addr.sin_port );
 
   if( -1 == connect(sock_fd,
                     (const struct sockaddr *) &server_addr, sizeof(server_addr))){
@@ -185,7 +186,6 @@ int main(int argc , char* argv[]){
         else if(figure_type==CHERRY){
             paint_cherry(x,y);//yellow
         }
-        //printf("new event received\n");
       }
       /* SEND TO SERVER*/
       if(event.type == SDL_KEYDOWN){
@@ -220,27 +220,16 @@ int main(int argc , char* argv[]){
                         &x_new, &y_new);
 
         pthread_mutex_lock(&player.monster_lock);
-        //if the mouse moved to another place
-        //if(((x_new == (player.x_monster+1) || x_new == (player.x_monster-1)) && (y_new == player.y_monster))
-        //  || ((y_new == (player.y_monster+1) || y_new == (player.y_monster-1)) && (x_new == player.x_monster))){
 
-          client_message msg;
-          //if(!is_server)
-          msg.figure_type = MONSTER;
-          msg.x = x_new;
-          msg.y = y_new;
-          //msg.c = color;?????????
-
-          send(sock_fd, &msg, sizeof(msg), 0);
-        //}
+        client_message msg;
+        msg.figure_type = MONSTER;
+        msg.x = x_new;
+        msg.y = y_new;
+        send(sock_fd, &msg, sizeof(msg), 0);
         pthread_mutex_unlock(&player.monster_lock);
       }
-      //printf("monster_pos: (%d,%d)\n", player.x_monster,player.y_monster);
-      //printf("pacman_pos: (%d,%d)\n", player.x_pacman,player.y_pacman);
     }
   }
 
-  //printf("fim\n");
-  close_board_windows();
-  exit(0);
+  close_sockets_exit();
 }

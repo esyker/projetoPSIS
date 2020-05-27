@@ -23,6 +23,8 @@ int server_socket;
 LinkedList* players;
 LinkedList *fruits;
 board game_board;
+score_info score;
+server_info server;
 
 
 /*******************************************************************************/
@@ -57,37 +59,6 @@ void send_to_players_no_lock(void *msg){
 
 void send_to_players_2_messages(void *msg){
   trasverse(players,msg,send_to_player_2_messages);
-}
-
-void removeFirstFruitInfo(LinkedList* list){
-  fruit_info* fruit;
-  Node* aux;
-  if (list->_size > 0)
-  {
-    if (list->_size == 1){ //clear(list)
-      fruit=(fruit_info*)list->root->data;
-      fruit->exit=1;
-      sem_post(&(fruit->sem_fruit));
-    	list->root->data=NULL;
-    	free(list->root);
-      list->root = NULL;
-      list->tail = NULL;
-      list->_size = 0;
-    }
-    else
-    {
-      aux=list->root;
-      list->root = list->root->next;
-      list->root->prev = NULL;
-      list->_size--;
-      fruit=(fruit_info*)aux->data;
-      fruit->exit=1;
-      sem_post(&(fruit->sem_fruit));
-    	aux->data=NULL;
-    	free(aux);
-    }
-  }
-
 }
 
 /********************************************************************/
@@ -157,22 +128,6 @@ void load_board(char * file_name){
     }
   }
 
-}
-
-void destroyBoard(){
-  for(int i=0;i<game_board.size_x;i++){
-    pthread_mutex_destroy(&game_board.line_lock[i]);
-  }
-  free(game_board.line_lock);
-  for(int i=0;i<game_board.size_y;i++){
-    pthread_mutex_destroy(&game_board.column_lock[i]);
-  }
-  free(game_board.column_lock);
-
-  for(int i=0;i<game_board.size_x;i++){
-    free(game_board.array[i]);
-  }
-  free(game_board.array);
 }
 
 server_message assignRandCoords(player_info* player,int figure_type,int init){
@@ -542,18 +497,30 @@ void get_score_send(void* player_inf,void* message){
 }
 
 void* scoreThread(void* argv){
+  struct timespec timeout;
+  timeout.tv_sec=time(NULL)+7;
+  timeout.tv_nsec=0;
+
   server_message* msg=(server_message*)malloc(sizeof(server_message));
   while(1){
-    sleep(7);
-    printf("\n  SCOREBOARD:\n");
-    msg->type=SCOREBOARD;
-    pthread_mutex_lock(&players->mutex);
-    send_to_players_no_lock(msg);
-    trasverse_no_lock(players,msg,get_score_send);
-    pthread_mutex_unlock(&players->mutex);
+    if(sem_timedwait(&score.sem_score,&timeout)==-1){
+      if(errno==ETIMEDOUT){
+        printf("\n  SCOREBOARD:\n");
+        msg->type=SCOREBOARD;
+        pthread_mutex_lock(&players->mutex);
+        send_to_players_no_lock(msg);
+        trasverse_no_lock(players,msg,get_score_send);
+        pthread_mutex_unlock(&players->mutex);
+        timeout.tv_sec=time(NULL)+7;
+      }
+    }
+    else{
+      break;
+    }
   }
+  pthread_barrier_wait(&score.barrier);
+  return NULL;
 }
-
 /*******************************************************************/
 /*******************************************************************/
 /***                 FRUIT RELATED FUNCTIONS                       **/
@@ -564,6 +531,38 @@ void* scoreThread(void* argv){
 /*    OR THREADS THAT ASSIGN NEW POSITION WHEN THE MONSTER OR PACMAN*/
 /*    ARE EATEN                                                      */
 /*********************************************************************/
+
+
+void removeFirstFruitInfo(LinkedList* list){
+  fruit_info* fruit;
+  Node* aux;
+  if (list->_size > 0)
+  {
+    if (list->_size == 1){ //clear(list)
+      fruit=(fruit_info*)list->root->data;
+      fruit->exit=1;
+      sem_post(&(fruit->sem_fruit));
+    	list->root->data=NULL;
+    	free(list->root);
+      list->root = NULL;
+      list->tail = NULL;
+      list->_size = 0;
+    }
+    else
+    {
+      aux=list->root;
+      list->root = list->root->next;
+      list->root->prev = NULL;
+      list->_size--;
+      fruit=(fruit_info*)aux->data;
+      fruit->exit=1;
+      sem_post(&(fruit->sem_fruit));
+    	aux->data=NULL;
+    	free(aux);
+    }
+  }
+
+}
 
 void fruit_score_player_disconnect(LinkedList* players, LinkedList* fruits){
   removeFirstFruitInfo(fruits);
@@ -599,6 +598,7 @@ void * fruitGenerator(void * argv){
               pthread_mutex_destroy(&fruit->mutex);
               output.x=fruit->x;
               output.y=fruit->y;
+              pthread_mutex_destroy(&(fruit->mutex));
               free(fruit);
               output.type=EMPTY;
               send_to_players(&output);
@@ -608,7 +608,7 @@ void * fruitGenerator(void * argv){
               new_event.type = Event_ShowFigure;
               new_event.user.data1 = event_data;
               SDL_PushEvent(&new_event);
-              return NULL;
+              break;
             }
             if(!firstime) sleep(2);
             else firstime=0;
@@ -737,6 +737,7 @@ void player_disconect(player_info* player){
   sem_post(&(player->sem_pacman_eaten));
   send_to_players(event_data1);
   send_to_players(event_data2);
+  pthread_barrier_wait(&player->barrier);
   pthread_mutex_destroy(&(player->mutex));
   close(player->client_fd);
   free(player);
@@ -759,7 +760,7 @@ void * monsterEaten(void * argv){
   while(1){
     if(sem_wait(&(player->sem_monster_eaten))==0){
       if((player->exit)==1){//player exits
-        return NULL;
+        break;
       }
       pthread_mutex_lock(&player->mutex);
       msg=assignRandCoords(player,MONSTER,NOT_INIT);
@@ -767,6 +768,8 @@ void * monsterEaten(void * argv){
       send_to_players(&msg);
     }
   }
+  sem_destroy(&(player->sem_monster_eaten));
+  pthread_barrier_wait(&player->barrier);
   return NULL;
 }
 
@@ -777,7 +780,7 @@ void * pacmanEaten(void * argv){
   while(1){
     if(sem_wait(&(player->sem_pacman_eaten))==0){
       if((player->exit)==1){//player exits
-        return NULL;
+        break;
       }
       pthread_mutex_lock(&player->mutex);
       msg=assignRandCoords(player,PACMAN,NOT_INIT);
@@ -785,6 +788,8 @@ void * pacmanEaten(void * argv){
       send_to_players(&msg);
     }
   }
+  sem_destroy(&(player->sem_pacman_eaten));
+  pthread_barrier_wait(&player->barrier);
   return NULL;
 }
 
@@ -834,13 +839,14 @@ void * playerInactivity(void * argv){
     }
     else{
       if((player->exit)==1){//player exits
-        sem_destroy(&(player->sem_inact));
-        return NULL;
+        break;
       }
       timeout.tv_sec=time(NULL)+8;
     }
   }
 
+  sem_destroy(&(player->sem_inact));
+  pthread_barrier_wait(&player->barrier);
   return NULL;
 }
 
@@ -950,6 +956,11 @@ void *serverThread(void * argc){
   int new_client_fd=0;
   player_info* new_player_info;
 
+  sem_init(&(score.sem_score),0,0);
+  if(pthread_barrier_init(&score.barrier,NULL,2)!=0){
+        printf("\n score barrier init has failed\n");
+        exit(-1);
+  }
   pthread_create(&thread_id,NULL,scoreThread,NULL);
 
   while(1){
@@ -967,6 +978,10 @@ void *serverThread(void * argc){
            printf("\n player mutex init has failed\n");
            exit(-1);
      }
+     if(pthread_barrier_init(&new_player_info->barrier,NULL,4)!=0){
+           printf("\n player barrier init has failed\n");
+           exit(-1);
+     }
      add(players,(void*)new_player_info);
      //Create a new workThread
      pthread_create(&thread_id,NULL,playerThread,(void*)new_player_info);
@@ -982,6 +997,33 @@ void *serverThread(void * argc){
 /******************************************************/
 /******************************************************/
 
+void destroyBoard(){
+  if(game_board.line_lock!=NULL){
+    for(int i=0;i<game_board.size_x;i++){
+      if(&game_board.line_lock[i]!=NULL)
+        pthread_mutex_destroy(&game_board.line_lock[i]);
+    }
+  free(game_board.line_lock);
+  }
+
+  if(game_board.column_lock!=NULL){
+    for(int i=0;i<game_board.size_y;i++){
+      if(&game_board.column_lock[i]!=NULL)
+        pthread_mutex_destroy(&game_board.column_lock[i]);
+    }
+  free(game_board.column_lock);
+  }
+
+  for(int i=0;i<game_board.size_x;i++){
+    if(game_board.array[i]!=NULL){
+      free(game_board.array[i]);
+    }
+  }
+  if(game_board.array!=NULL){
+    free(game_board.array);
+  }
+}
+
 void destroyPlayer(void* _player){
   player_info* player= (player_info*)_player;
   pthread_mutex_destroy(&(player->mutex));
@@ -990,20 +1032,36 @@ void destroyPlayer(void* _player){
   sem_post(&(player->sem_monster_eaten));
   sem_post(&(player->sem_pacman_eaten));
   sem_post(&player->sem_inact);
+  pthread_barrier_wait(&player->barrier);
+  close(player->client_fd);
+  pthread_mutex_destroy(&(player->mutex));
   free(player);
 }
 
 void destroyFruit(void* _fruit){
   fruit_info* fruit= (fruit_info*)_fruit;
-  pthread_mutex_destroy(&(fruit->mutex));
   fruit->exit=1;
   sem_post(&fruit->sem_fruit);
 }
 
-void free_game_memory(){
-  destroy(players,destroyPlayer);
-  destroy(fruits,destroyFruit);
+void free_game_memory_exit(){
+  printf("CLOSING WINDOW\n!");
+  close_board_windows();
+  printf("CLOSING SOCKET\n");
+  close(server_socket);
+  pthread_join(server.thread_id,NULL);
+  printf("CLOSING SCORE\n");
+  sem_post(&score.sem_score);
+  pthread_barrier_wait(&score.barrier);
+  printf("Player\n");
+  if(players!=NULL)
+    destroy(players,destroyPlayer);
+  printf("Fruits\n");
+  if(fruits!=NULL)
+    destroy(fruits,destroyFruit);
   destroyBoard();
+  printf("Memory freed and sockets closed!\nEND\n");
+  exit(0);
 }
 
 /*****************************************************/
@@ -1020,12 +1078,12 @@ int main(int argc , char* argv[]){
   srand(time(NULL));
   SDL_Event event;
   int done = 0;
-  pthread_t thread_id;
 
   Event_ShowFigure = SDL_RegisterEvents(1);
 
   //do not abort program for broken pipe
   signal(SIGPIPE, SIG_IGN);
+  //signal(SIGINT,free_game_memory_exit);
 
   struct sockaddr_in server_local_addr;
 
@@ -1060,7 +1118,8 @@ int main(int argc , char* argv[]){
     }
   }
 
-  pthread_create(&thread_id, NULL, serverThread, NULL);
+  pthread_create(&server.thread_id, NULL, serverThread, NULL);
+  pthread_detach(server.thread_id);
 
 
   int x,y,figure_type,color;
@@ -1106,8 +1165,5 @@ int main(int argc , char* argv[]){
     }
   }
 
-  free_game_memory();
-  printf("fim\n");
-  close_board_windows();
-  exit(0);
+  free_game_memory_exit();
 }

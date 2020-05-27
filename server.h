@@ -39,6 +39,7 @@ typedef struct player_info{
   sem_t sem_pacman_eaten;
   int pacman_eaten;//0 if false 1 if true
   int score;
+  pthread_barrier_t barrier;
   int exit;//player thread exits
 }player_info;
 
@@ -52,6 +53,15 @@ typedef struct fruit_info{
   pthread_t thread_id;
   int exit;//fruit thread exits
 }fruit_info;
+
+typedef struct score_info{
+  sem_t sem_score;
+  pthread_barrier_t barrier;
+}score_info;
+
+typedef struct server_info{
+  pthread_t thread_id;
+}server_info;
 
 typedef struct board_square{
   int figure_type;//0=empty 1=brick 2=pacman 3=monster 4=fruit

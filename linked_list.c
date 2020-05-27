@@ -198,7 +198,8 @@ void removeFirst(struct LinkedList *list)
 
 void destroy(struct LinkedList *list,void (*destroyDataFunc)(void* data))
 {
-	pthread_mutex_destroy(&list->mutex);
+	if(&list->mutex!=NULL)
+		pthread_mutex_destroy(&list->mutex);
   Node * current = list->root;
   Node * next = current;
   while(current != NULL){
