@@ -1045,18 +1045,13 @@ void destroyFruit(void* _fruit){
 }
 
 void free_game_memory_exit(){
-  printf("CLOSING WINDOW\n!");
   close_board_windows();
-  printf("CLOSING SOCKET\n");
   close(server_socket);
   pthread_join(server.thread_id,NULL);
-  printf("CLOSING SCORE\n");
   sem_post(&score.sem_score);
   pthread_barrier_wait(&score.barrier);
-  printf("Player\n");
   if(players!=NULL)
     destroy(players,destroyPlayer);
-  printf("Fruits\n");
   if(fruits!=NULL)
     destroy(fruits,destroyFruit);
   destroyBoard();
