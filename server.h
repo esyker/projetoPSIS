@@ -1,7 +1,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 
-typedef enum {INIT=-1,EMPTY=0,BRICK=1,PACMAN=2,MONSTER=3,CHERRY=4,LEMON=5,POWER_PACMAN=6,SCOREBOARD=8,SCORE_MSG=9}event_type;
+typedef enum {INIT=-1,EMPTY=0,BRICK=1,PACMAN=2,MONSTER=3,CHERRY=4,LEMON=5,POWER_PACMAN=6,BOARD_FULL=7,SCOREBOARD=8,SCORE_MSG=9}event_type;
 typedef enum{NOT_INIT=0,INITIALIZATION=1} initialization_type;
 
 typedef struct server_message{
@@ -77,4 +77,7 @@ typedef struct board{
   pthread_mutex_t* column_lock;
   int size_x;
   int size_y;
+  int numb_bricks;
+  int numb_players;
+  pthread_mutex_t numb_players_mutex;
 }board;

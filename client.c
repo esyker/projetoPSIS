@@ -66,8 +66,12 @@ void *clientThread(void *arg){
     else if(msg.type==SCORE_MSG){
       printf("PLAYER:%d SCORE:%d\n",msg.player_id,msg.score);
     }
-
-
+    else if(msg.type==BOARD_FULL)
+    {
+      printf("\nBOARD IS FULL TRY AGAIN LATER!\n");
+      close(sock_fd);
+      exit(0);
+    }
     event_data = (server_message*)malloc(sizeof(server_message));
     *event_data = msg;
     SDL_zero(new_event);

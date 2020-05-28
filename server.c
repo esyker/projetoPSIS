@@ -90,26 +90,38 @@ void load_board(char * file_name){
     printf("Board file does not specify x and y dimensions\n!");
     exit(-1);
   }
+  printf("%s",line);
 
-  game_board.array=(board_square**)malloc(game_board.size_x*sizeof(board_square*));
-  for(int i=0;i<game_board.size_x;i++){
-    game_board.array[i]=(board_square*)malloc(game_board.size_y*sizeof(board_square));
+  game_board.array=(board_square**)malloc(game_board.size_y*sizeof(board_square*));
+  for(int i=0;i<game_board.size_y;i++){
+    game_board.array[i]=(board_square*)malloc(game_board.size_x*sizeof(board_square));
   }
 
-  for(int i =0;i<game_board.size_x;i++){
+  if (pthread_mutex_init(&game_board.numb_players_mutex, NULL) != 0) {
+        printf("\n board mutex for players init has failed\n");
+        exit(-1);
+  }
+  game_board.numb_bricks=0;
+  game_board.numb_players=0;
+
+  for(int j =0;j<game_board.size_y;j++){
     if(fgets(line,1024,fptr)==NULL){
       printf("Error reading file!");
       exit(-1);
     }
-    for(int j=0;j<game_board.size_y;j++){
-      game_board.array[i][j].player_id=-1;
-      if(line[j]==' ')
-        game_board.array[i][j].figure_type=EMPTY;
-      else
-        game_board.array[i][j].figure_type=BRICK;
-      game_board.array[i][j].player_id=-1;
-      game_board.array[i][j].player=NULL;
-      game_board.array[i][j].fruit=NULL;
+    printf("%s",line);
+    for(int i=0;i<game_board.size_x;i++){
+      game_board.array[j][i].player_id=-1;
+      if(line[i]=='B'){
+        game_board.array[j][i].figure_type=BRICK;
+        game_board.numb_bricks++;
+      }
+      else{
+        game_board.array[j][i].figure_type=EMPTY;
+      }
+      game_board.array[j][i].player_id=-1;
+      game_board.array[j][i].player=NULL;
+      game_board.array[j][i].fruit=NULL;
     }
   }
 
@@ -138,17 +150,17 @@ server_message assignRandCoords(player_info* player,int figure_type,int init){
 
   int i,j;
   while(1){
-    i=rand()%game_board.size_x;
     j=rand()%game_board.size_y;
+    i=rand()%game_board.size_x;
     if(init||(i!=player->pacman_x&&i!=player->monster_x))
       pthread_mutex_lock(&game_board.line_lock[i]);
     if(init||(j!=player->pacman_y&&j!=player->monster_y))
       pthread_mutex_lock(&game_board.column_lock[j]);
-    if(game_board.array[i][j].figure_type==EMPTY){
-      game_board.array[i][j].figure_type=figure_type;
-      game_board.array[i][j].color=color;
-      game_board.array[i][j].player_id=player_id;
-      game_board.array[i][j].player=player;
+    if(game_board.array[j][i].figure_type==EMPTY){
+      game_board.array[j][i].figure_type=figure_type;
+      game_board.array[j][i].color=color;
+      game_board.array[j][i].player_id=player_id;
+      game_board.array[j][i].player=player;
       if(init||(i!=player->pacman_x&&i!=player->monster_x))
         pthread_mutex_unlock(&game_board.line_lock[i]);
       if(init||(j!=player->pacman_y&&j!=player->monster_y))
@@ -190,8 +202,8 @@ server_message assignRandCoords(player_info* player,int figure_type,int init){
 
 server_message board_to_message(int x, int y){
   server_message msg;
-  msg.type=game_board.array[x][y].figure_type;
-  msg.c=game_board.array[x][y].color;
+  msg.type=game_board.array[y][x].figure_type;
+  msg.c=game_board.array[y][x].color;
   msg.x=x;
   msg.y=y;
   return msg;
@@ -205,11 +217,11 @@ server_message change_board(int x, int y,int figure_type,
   msg.y=y;
   msg.player_id=id;
   msg.c=color;
-  game_board.array[x][y].figure_type=figure_type;
-  game_board.array[x][y].color=color;
-  game_board.array[x][y].player_id=id;
-  game_board.array[x][y].player=player;
-  game_board.array[x][y].fruit=fruit;
+  game_board.array[y][x].figure_type=figure_type;
+  game_board.array[y][x].color=color;
+  game_board.array[y][x].player_id=id;
+  game_board.array[y][x].player=player;
+  game_board.array[y][x].fruit=fruit;
   return msg;
 }
 
@@ -264,7 +276,7 @@ server_message* validate_play_get_answer(client_message input, player_info* play
   if(new_y>=game_board.size_y) new_y=game_board.size_y-2;
 
   //CHARACTER MOVES TO BRICK ->BOUNCE
-  if(game_board.array[new_x][new_y].figure_type==BRICK){
+  if(game_board.array[new_y][new_x].figure_type==BRICK){
     int bounce_x=current_x,bounce_y=current_y;
     if(new_x<current_x)bounce_x++;
     else if(new_x>current_x)bounce_x--;
@@ -282,14 +294,14 @@ server_message* validate_play_get_answer(client_message input, player_info* play
 
   pthread_mutex_lock(&game_board.line_lock[current_x]);
   pthread_mutex_lock(&game_board.column_lock[current_y]);
-  if(game_board.array[new_x][new_y].player!=NULL&&game_board.array[new_x][new_y].player!=player){
-    pthread_mutex_lock(&game_board.array[new_x][new_y].player->mutex);
-    new_player=game_board.array[new_x][new_y].player;
+  if(game_board.array[new_y][new_x].player!=NULL&&game_board.array[new_y][new_x].player!=player){
+    pthread_mutex_lock(&game_board.array[new_y][new_x].player->mutex);
+    new_player=game_board.array[new_y][new_x].player;
     player_locked=1;
   }
-  else if(game_board.array[new_x][new_y].fruit!=NULL){
-    pthread_mutex_lock(&game_board.array[new_x][new_y].fruit->mutex);
-    new_fruit=game_board.array[new_x][new_y].fruit;
+  else if(game_board.array[new_y][new_x].fruit!=NULL){
+    pthread_mutex_lock(&game_board.array[new_y][new_x].fruit->mutex);
+    new_fruit=game_board.array[new_y][new_x].fruit;
     fruit_locked=1;
   }
   if(new_x!=current_x){
@@ -299,13 +311,13 @@ server_message* validate_play_get_answer(client_message input, player_info* play
     pthread_mutex_lock(&game_board.column_lock[new_y]);
   }
 
-  int new_figure_type=game_board.array[new_x][new_y].figure_type;
-  int new_id=game_board.array[new_x][new_y].player_id;
-  int new_color=game_board.array[new_x][new_y].color;
-  int current_figure=game_board.array[current_x][current_y].figure_type;
+  int new_figure_type=game_board.array[new_y][new_x].figure_type;
+  int new_id=game_board.array[new_y][new_x].player_id;
+  int new_color=game_board.array[new_y][new_x].color;
+  int current_figure=game_board.array[current_y][current_x].figure_type;
 
   //CHARACTERS OF THE SAME PLAYER-> CHANGE POSITION
-  if(game_board.array[new_x][new_y].player_id==player->client_fd){
+  if(game_board.array[new_y][new_x].player_id==player->client_fd){
     output=(server_message*)malloc(2*sizeof(server_message));
     msg=change_board(new_x,new_y,current_figure,player,NULL,player->color,player->client_fd);
     output[0]=msg;
@@ -321,7 +333,7 @@ server_message* validate_play_get_answer(client_message input, player_info* play
   }
 
   //CHARACTER MOVES TO EMPTY POSITION -> CHANGE POSITION
-  else if(game_board.array[new_x][new_y].figure_type==EMPTY){
+  else if(game_board.array[new_y][new_x].figure_type==EMPTY){
     output=(server_message*)malloc(2*sizeof(server_message));
     msg=change_board(current_x,current_y,EMPTY,NULL,NULL,-1,-1);
     output[0]=msg;
@@ -340,9 +352,9 @@ server_message* validate_play_get_answer(client_message input, player_info* play
 
   //PACMAN MOVES INTO PACMAN ->CHANGE POSITION
   //MONSTER MOVES INTO MONSTER -> CHANGE POSITION
-  else if((game_board.array[new_x][new_y].figure_type==input.figure_type||
-  (game_board.array[new_x][new_y].figure_type==POWER_PACMAN&&input.figure_type==PACMAN))
-  &&(game_board.array[new_x][new_y].player_id!=player->client_fd)){
+  else if((game_board.array[new_y][new_x].figure_type==input.figure_type||
+  (game_board.array[new_y][new_x].figure_type==POWER_PACMAN&&input.figure_type==PACMAN))
+  &&(game_board.array[new_y][new_x].player_id!=player->client_fd)){
     output=(server_message*)malloc(2*sizeof(server_message));
     msg=change_board(current_x,current_y,new_figure_type,new_player,NULL,new_color,new_id);
     output[0]=msg;
@@ -366,8 +378,8 @@ server_message* validate_play_get_answer(client_message input, player_info* play
   else if(input.figure_type==PACMAN)//move_pacman
   {
     //PACMAN INTO FRUIT -> FRUIT IS EATEN AND MOVED TO RANDOM POSITION, SCORE INCREASES
-    if(game_board.array[new_x][new_y].figure_type==LEMON||
-      game_board.array[new_x][new_y].figure_type==CHERRY){
+    if(game_board.array[new_y][new_x].figure_type==LEMON||
+      game_board.array[new_y][new_x].figure_type==CHERRY){
       output=(server_message*)malloc(2*sizeof(server_message));
       msg=change_board(current_x,current_y,EMPTY,NULL,NULL,-1,-1);
       output[0]=msg;
@@ -382,7 +394,7 @@ server_message* validate_play_get_answer(client_message input, player_info* play
       send_message=1;
     }
     //PACMAN INTO MONSTER-> MONSTER EATEN AND MOVED TO RANDOM POSITION, OPPONENT SCORE INCREASES
-    else if(game_board.array[new_x][new_y].figure_type==MONSTER){
+    else if(game_board.array[new_y][new_x].figure_type==MONSTER){
       output=(server_message*)malloc(2*sizeof(server_message));
       if(player->super_powered_pacman){
         player->monster_eat_count--;
@@ -416,8 +428,8 @@ server_message* validate_play_get_answer(client_message input, player_info* play
   else if(input.figure_type==MONSTER)//move_monster
   {
     //MONSTER INTO FRUIT -> FRUIT IS EATEN AND MOVED TO RANDOM POSITION, SCORE INCREASES
-    if(game_board.array[new_x][new_y].figure_type==LEMON||
-      game_board.array[new_x][new_y].figure_type==CHERRY){
+    if(game_board.array[new_y][new_x].figure_type==LEMON||
+      game_board.array[new_y][new_x].figure_type==CHERRY){
       output=(server_message*)malloc(2*sizeof(server_message));
       msg=change_board(current_x,current_y,EMPTY,NULL,NULL,-1,-1);
       output[0]=msg;
@@ -430,7 +442,7 @@ server_message* validate_play_get_answer(client_message input, player_info* play
       send_message=1;
     }
     //MONSTER AGAINST SUPERPOWERED PACMAN -> MONSTER EATEN AND MOVED TO RANDOM POSITION, OPPONENT SCORE INCREASES
-    else if(game_board.array[new_x][new_y].figure_type==POWER_PACMAN){
+    else if(game_board.array[new_y][new_x].figure_type==POWER_PACMAN){
       output=(server_message*)malloc(2*sizeof(server_message));
       msg=change_board(current_x,current_y,EMPTY,NULL,NULL,-1,-1);
       output[0]=msg;
@@ -449,7 +461,7 @@ server_message* validate_play_get_answer(client_message input, player_info* play
       send_message=1;
     }
     //MONSTER AGAINST NORMAL PACMAN -> PACMAN EATEN AND MOVED TO RANDOM POSITION, SCORE INCREASES
-    else if(game_board.array[new_x][new_y].figure_type==PACMAN){
+    else if(game_board.array[new_y][new_x].figure_type==PACMAN){
       output=(server_message*)malloc(2*sizeof(server_message));
       msg=change_board(current_x,current_y,EMPTY,NULL,NULL,-1,-1);
       output[0]=msg;
@@ -587,10 +599,10 @@ void * fruitGenerator(void * argv){
               pthread_mutex_lock(&fruit->mutex);
               pthread_mutex_lock(&game_board.line_lock[fruit->x]);
               pthread_mutex_lock(&game_board.column_lock[fruit->y]);
-              game_board.array[fruit->x][fruit->y].figure_type=EMPTY;
-              game_board.array[fruit->x][fruit->y].player_id=-1;
-              game_board.array[fruit->x][fruit->y].player=NULL;
-              game_board.array[fruit->x][fruit->y].fruit=NULL;
+              game_board.array[fruit->y][fruit->x].figure_type=EMPTY;
+              game_board.array[fruit->y][fruit->x].player_id=-1;
+              game_board.array[fruit->y][fruit->x].player=NULL;
+              game_board.array[fruit->y][fruit->x].fruit=NULL;
               sem_destroy(&fruit->sem_fruit);
               pthread_mutex_unlock(&game_board.line_lock[fruit->x]);
               pthread_mutex_unlock(&game_board.column_lock[fruit->y]);
@@ -616,13 +628,13 @@ void * fruitGenerator(void * argv){
             pthread_mutex_lock(&fruit->mutex);
             fruit->type=(rand()%2)+4;// 4 or 5
             while(1){
-              i=rand()%game_board.size_x;
               j=rand()%game_board.size_y;
+              i=rand()%game_board.size_x;
               pthread_mutex_lock(&game_board.line_lock[i]);
               pthread_mutex_lock(&game_board.column_lock[j]);
-              if(game_board.array[i][j].figure_type==EMPTY){
-                game_board.array[i][j].figure_type=fruit->type;
-                game_board.array[i][j].fruit=fruit;
+              if(game_board.array[j][i].figure_type==EMPTY){
+                game_board.array[j][i].figure_type=fruit->type;
+                game_board.array[j][i].fruit=fruit;
                 pthread_mutex_unlock(&game_board.line_lock[i]);
                 pthread_mutex_unlock(&game_board.column_lock[j]);
                 break;
@@ -701,20 +713,23 @@ void player_disconect(player_info* player){
   monster_y=player->monster_y;
   pacman_x=player->pacman_x;
   pacman_y=player->pacman_y;
+  pthread_mutex_lock(&game_board.numb_players_mutex);
+  game_board.numb_players--;
+  pthread_mutex_unlock(&game_board.numb_players_mutex);
   pthread_mutex_lock(&game_board.line_lock[monster_x]);
   pthread_mutex_lock(&game_board.column_lock[monster_y]);
-  game_board.array[monster_x][monster_y].figure_type=EMPTY;
-  game_board.array[monster_x][monster_y].player_id=-1;
-  game_board.array[monster_x][monster_y].player=NULL;
-  game_board.array[monster_x][monster_y].fruit=NULL;
+  game_board.array[monster_y][monster_x].figure_type=EMPTY;
+  game_board.array[monster_y][monster_x].player_id=-1;
+  game_board.array[monster_y][monster_x].player=NULL;
+  game_board.array[monster_y][monster_x].fruit=NULL;
   pthread_mutex_unlock(&game_board.line_lock[monster_x]);
   pthread_mutex_unlock(&game_board.column_lock[monster_y]);
   pthread_mutex_lock(&game_board.line_lock[pacman_x]);
   pthread_mutex_lock(&game_board.column_lock[pacman_y]);
-  game_board.array[pacman_x][pacman_y].figure_type=EMPTY;
-  game_board.array[pacman_x][pacman_y].player_id=-1;
-  game_board.array[pacman_x][pacman_y].player=NULL;
-  game_board.array[pacman_x][pacman_y].fruit=NULL;
+  game_board.array[pacman_y][pacman_x].figure_type=EMPTY;
+  game_board.array[pacman_y][pacman_x].player_id=-1;
+  game_board.array[pacman_y][pacman_x].player=NULL;
+  game_board.array[pacman_y][pacman_x].fruit=NULL;
   pthread_mutex_unlock(&game_board.line_lock[pacman_x]);
   pthread_mutex_unlock(&game_board.column_lock[pacman_y]);
   pthread_mutex_unlock(&(player->mutex));
@@ -819,11 +834,11 @@ void * playerInactivity(void * argv){
           msg1.y=pacman_y;
           pthread_mutex_lock(&(game_board.line_lock[player->pacman_x]));
           pthread_mutex_lock(&(game_board.column_lock[player->pacman_y]));
-          current_figure=game_board.array[pacman_x][pacman_y].figure_type;
-          game_board.array[pacman_x][pacman_y].figure_type=EMPTY;
-          game_board.array[pacman_x][pacman_y].player_id=-1;
-          game_board.array[pacman_x][pacman_y].player=NULL;
-          game_board.array[pacman_x][pacman_y].fruit=NULL;
+          current_figure=game_board.array[pacman_y][pacman_x].figure_type;
+          game_board.array[pacman_y][pacman_x].figure_type=EMPTY;
+          game_board.array[pacman_y][pacman_x].player_id=-1;
+          game_board.array[pacman_y][pacman_x].player=NULL;
+          game_board.array[pacman_y][pacman_x].fruit=NULL;
           pthread_mutex_unlock(&(game_board.line_lock[player->pacman_x]));
           pthread_mutex_unlock(&(game_board.column_lock[player->pacman_y]));
           event_data=(server_message*)malloc(sizeof(server_message));
@@ -883,12 +898,12 @@ void * playerThread(void * argv){
 
   player->color=my_color;
 
-  for(int i=0;i<game_board.size_x;i++){
-    for(int j=0;j<game_board.size_y;j++){
+  for(int i=0;i<game_board.size_y;i++){
+    for(int j=0;j<game_board.size_x;j++){
       pthread_mutex_lock(&game_board.line_lock[i]);
       pthread_mutex_lock(&game_board.column_lock[j]);
       /**/
-      msg=board_to_message(i,j);
+      msg=board_to_message(j,i);
       send(client_sock_fd, &msg, sizeof(msg), 0);
       /**/
       pthread_mutex_unlock(&game_board.column_lock[j]);
@@ -945,6 +960,7 @@ void * playerThread(void * argv){
 }
 
 void *serverThread(void * argc){
+  server_message msg;
   struct sockaddr_in client_addr;
   socklen_t size_addr = sizeof(client_addr);
 
@@ -966,6 +982,20 @@ void *serverThread(void * argc){
   while(1){
     //Server waits for a new client to connect
      new_client_fd = accept(server_socket,(struct sockaddr *)&client_addr,&size_addr);
+
+     pthread_mutex_lock(&game_board.numb_players_mutex);
+     if((game_board.size_x*game_board.size_y-game_board.numb_bricks
+       -(game_board.numb_players-1)*2
+       -(game_board.numb_players*2))<4){
+      msg.type=BOARD_FULL;
+      send(new_client_fd,&msg, sizeof(server_message), 0);
+      close(new_client_fd);
+      pthread_mutex_unlock(&game_board.numb_players_mutex);
+      continue;
+    }
+    game_board.numb_players++;
+    pthread_mutex_unlock(&game_board.numb_players_mutex);
+
      if(new_client_fd == -1){
        perror("accept");
        exit(EXIT_FAILURE);
@@ -1014,7 +1044,7 @@ void destroyBoard(){
   free(game_board.column_lock);
   }
 
-  for(int i=0;i<game_board.size_x;i++){
+  for(int i=0;i<game_board.size_y;i++){
     if(game_board.array[i]!=NULL){
       free(game_board.array[i]);
     }
@@ -1102,13 +1132,19 @@ int main(int argc , char* argv[]){
   }
 
   load_board("board.txt");
-
+  for(int j=0;j<game_board.size_y;j++){
+    printf("\n");
+    for(int i=0;i<game_board.size_x;i++)
+    {
+      printf("%d",game_board.array[j][i].figure_type);
+    }
+  }
   create_board_window(game_board.size_x,game_board.size_y);
 
   //game_board mutexes aren't used because only main thread is running at this point
-  for(int i=0;i<game_board.size_x;i++){
-    for(int j=0;j<game_board.size_y;j++){
-        if(game_board.array[i][j].figure_type==BRICK)
+  for(int j=0;j<game_board.size_y;j++){
+    for(int i=0;i<game_board.size_x;i++){
+        if(game_board.array[j][i].figure_type==BRICK)
           paint_brick(i,j);
     }
   }
