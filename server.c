@@ -90,7 +90,6 @@ void load_board(char * file_name){
     printf("Board file does not specify x and y dimensions\n!");
     exit(-1);
   }
-  printf("%s",line);
 
   game_board.array=(board_square**)malloc(game_board.size_y*sizeof(board_square*));
   for(int i=0;i<game_board.size_y;i++){
@@ -109,7 +108,7 @@ void load_board(char * file_name){
       printf("Error reading file!");
       exit(-1);
     }
-    printf("%s",line);
+
     for(int i=0;i<game_board.size_x;i++){
       game_board.array[j][i].player_id=-1;
       if(line[i]=='B'){
@@ -898,12 +897,12 @@ void * playerThread(void * argv){
 
   player->color=my_color;
 
-  for(int i=0;i<game_board.size_y;i++){
-    for(int j=0;j<game_board.size_x;j++){
+  for(int j=0;j<game_board.size_y;j++){
+    for(int i=0;i<game_board.size_x;i++){
       pthread_mutex_lock(&game_board.line_lock[i]);
       pthread_mutex_lock(&game_board.column_lock[j]);
       /**/
-      msg=board_to_message(j,i);
+      msg=board_to_message(i,j);
       send(client_sock_fd, &msg, sizeof(msg), 0);
       /**/
       pthread_mutex_unlock(&game_board.column_lock[j]);
@@ -1132,13 +1131,6 @@ int main(int argc , char* argv[]){
   }
 
   load_board("board.txt");
-  for(int j=0;j<game_board.size_y;j++){
-    printf("\n");
-    for(int i=0;i<game_board.size_x;i++)
-    {
-      printf("%d",game_board.array[j][i].figure_type);
-    }
-  }
   create_board_window(game_board.size_x,game_board.size_y);
 
   //game_board mutexes aren't used because only main thread is running at this point

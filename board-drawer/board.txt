@@ -1,8 +1,9 @@
-8 7
-B       
-  B     
-      B 
- B  B   
-      B 
-     B  
-   B    
+7 8
+ B     
+    B B
+ B B   
+       
+       
+B B B  
+       
+   B   
