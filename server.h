@@ -48,6 +48,7 @@ typedef struct fruit_info{
   int y;
   int type;//4 CHERRY, 5 LEMON
   sem_t sem_fruit;
+  int eaten;//0 if false, 1 if true;
   pthread_mutex_t mutex;//used to read or write the current position of the figures
   int id;//id is the thread id, in order to be unique
   pthread_t thread_id;
@@ -56,7 +57,7 @@ typedef struct fruit_info{
 
 typedef struct score_info{
   sem_t sem_score;
-  pthread_barrier_t barrier;
+  pthread_t thread_id;
 }score_info;
 
 typedef struct server_info{

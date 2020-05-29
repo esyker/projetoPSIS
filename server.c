@@ -229,7 +229,7 @@ void load_board(char * file_name){
       exit(-1);
     }
   }
-
+  fclose(fptr);
 }
 
 /**
@@ -303,7 +303,7 @@ server_message assignRandCoords(player_info* player, int figure_type, int init){
   server_message *event_data;
   SDL_Event new_event;
   event_data = (server_message*)malloc(sizeof(server_message));
-  if(event_date == NULL){
+  if(event_data == NULL){
     printf("Unable to allocate memory assignRandCoords event_data.");
     exit(-1);
   }
@@ -505,6 +505,7 @@ server_message* validate_play_get_answer(client_message input, player_info* play
       player->score+=1;
       player->super_powered_pacman=1;
       player->monster_eat_count=2;
+      new_fruit->eaten=1;
       sem_post(&(new_fruit->sem_fruit));
       send_message=1;
     }
@@ -553,6 +554,7 @@ server_message* validate_play_get_answer(client_message input, player_info* play
       player->monster_x=new_x;
       player->monster_y=new_y;
       player->score+=1;
+      new_fruit->eaten=1;
       sem_post(&(new_fruit->sem_fruit));
       send_message=1;
     }
@@ -645,7 +647,6 @@ void* scoreThread(void* argv){
       break;
     }
   }
-  pthread_barrier_wait(&score.barrier);
   return NULL;
 }
 /*******************************************************************/
@@ -659,41 +660,17 @@ void* scoreThread(void* argv){
 /*    ARE EATEN                                                      */
 /*********************************************************************/
 
-
-void removeFirstFruitInfo(LinkedList* list){
-  fruit_info* fruit;
-  Node* aux;
-  if (list->_size > 0)
-  {
-    if (list->_size == 1){ //clear(list)
-      fruit=(fruit_info*)list->root->data;
-      fruit->exit=1;
-      sem_post(&(fruit->sem_fruit));
-    	list->root->data=NULL;
-    	free(list->root);
-      list->root = NULL;
-      list->tail = NULL;
-      list->_size = 0;
-    }
-    else
-    {
-      aux=list->root;
-      list->root = list->root->next;
-      list->root->prev = NULL;
-      list->_size--;
-      fruit=(fruit_info*)aux->data;
-      fruit->exit=1;
-      sem_post(&(fruit->sem_fruit));
-    	aux->data=NULL;
-    	free(aux);
-    }
-  }
-
+void removeFruitData(void* _fruit){
+  fruit_info* fruit=(fruit_info*)_fruit;
+  pthread_mutex_lock(&fruit->mutex);
+  fruit->exit=1;
+  pthread_mutex_unlock(&fruit->mutex);
+  sem_post(&(fruit->sem_fruit));
 }
 
 void fruit_score_player_disconnect(LinkedList* players, LinkedList* fruits){
-  removeFirstFruitInfo(fruits);
-  removeFirstFruitInfo(fruits);
+  removeFirst_no_lock(fruits,removeFruitData);
+  removeFirst_no_lock(fruits,removeFruitData);
   if(players->_size==1){
     player_info* last_player=(player_info*)players->root->data;
     last_player->score=0;
@@ -706,35 +683,39 @@ void * fruitGenerator(void * argv){
   server_message *event_data;
   server_message output;
   SDL_Event new_event;
-  int firstime=1;
+  int firstime=1,fruit_eaten=0;
 
   while(1){
         if(sem_wait(&(fruit->sem_fruit))==0){
             if((fruit->exit)==1){
-              pthread_mutex_lock(&fruit->mutex);
-              pthread_mutex_lock(&game_board.line_lock[fruit->x]);
-              pthread_mutex_lock(&game_board.column_lock[fruit->y]);
-              game_board.array[fruit->y][fruit->x].figure_type=EMPTY;
-              game_board.array[fruit->y][fruit->x].player_id=-1;
-              game_board.array[fruit->y][fruit->x].player=NULL;
-              game_board.array[fruit->y][fruit->x].fruit=NULL;
               sem_destroy(&fruit->sem_fruit);
-              pthread_mutex_unlock(&game_board.line_lock[fruit->x]);
-              pthread_mutex_unlock(&game_board.column_lock[fruit->y]);
+              pthread_mutex_lock(&fruit->mutex);
+              if(!fruit->eaten){//assure fruit is in the board in this moment (isn't eaten)
+                fruit_eaten=fruit->eaten;
+                pthread_mutex_lock(&game_board.line_lock[fruit->x]);
+                pthread_mutex_lock(&game_board.column_lock[fruit->y]);
+                game_board.array[fruit->y][fruit->x].figure_type=EMPTY;
+                game_board.array[fruit->y][fruit->x].player_id=-1;
+                game_board.array[fruit->y][fruit->x].player=NULL;
+                game_board.array[fruit->y][fruit->x].fruit=NULL;
+                pthread_mutex_unlock(&game_board.line_lock[fruit->x]);
+                pthread_mutex_unlock(&game_board.column_lock[fruit->y]);
+                output.x=fruit->x;
+                output.y=fruit->y;
+                output.type=EMPTY;
+              }
               pthread_mutex_unlock(&fruit->mutex);
               pthread_mutex_destroy(&fruit->mutex);
-              output.x=fruit->x;
-              output.y=fruit->y;
-              pthread_mutex_destroy(&(fruit->mutex));
               free(fruit);
-              output.type=EMPTY;
-              send_to_players(&output);
-              event_data = (server_message*)malloc(sizeof(server_message));
-              *event_data = output;
-              SDL_zero(new_event);
-              new_event.type = Event_ShowFigure;
-              new_event.user.data1 = event_data;
-              SDL_PushEvent(&new_event);
+              if(!fruit_eaten){//assure fruit is in the board in this moment (isn't eaten)
+                send_to_players(&output);
+                event_data = (server_message*)malloc(sizeof(server_message));
+                *event_data = output;
+                SDL_zero(new_event);
+                new_event.type = Event_ShowFigure;
+                new_event.user.data1 = event_data;
+                SDL_PushEvent(&new_event);
+              }
               break;
             }
             if(!firstime) sleep(2);
@@ -750,6 +731,7 @@ void * fruitGenerator(void * argv){
               if(game_board.array[j][i].figure_type==EMPTY){
                 game_board.array[j][i].figure_type=fruit->type;
                 game_board.array[j][i].fruit=fruit;
+                fruit->eaten=0;
                 pthread_mutex_unlock(&game_board.line_lock[i]);
                 pthread_mutex_unlock(&game_board.column_lock[j]);
                 break;
@@ -792,6 +774,7 @@ void fruit_new_player(LinkedList* players, LinkedList* fruits){
     sem_init(&(fruit1->sem_fruit),0,1);
     add_no_lock(fruits,fruit1);
     pthread_create(&fruit1->thread_id,NULL,fruitGenerator,(void*)fruit1);
+    pthread_detach(fruit1->thread_id);
     fruit_info * fruit2=(fruit_info*)malloc(sizeof(fruit_info));
     if (pthread_mutex_init(&(fruit2->mutex), NULL) != 0) {
           printf("\nfruit mutex init has failed\n");
@@ -800,6 +783,7 @@ void fruit_new_player(LinkedList* players, LinkedList* fruits){
     sem_init(&(fruit2->sem_fruit),0,1);
     add_no_lock(fruits,fruit2);
     pthread_create(&fruit2->thread_id,NULL,fruitGenerator,(void*)fruit2);
+    pthread_detach(fruit2->thread_id);
   }
   pthread_mutex_unlock(&(fruits->mutex));
   pthread_mutex_unlock(&(players->mutex));
@@ -824,13 +808,12 @@ void player_disconect(player_info* player){
 
   int monster_x,monster_y,pacman_x,pacman_y;
   pthread_mutex_lock(&(player->mutex));
-  monster_x=player->monster_x;
-  monster_y=player->monster_y;
-  pacman_x=player->pacman_x;
-  pacman_y=player->pacman_y;
   pthread_mutex_lock(&game_board.numb_players_mutex);
   game_board.numb_players--;
   pthread_mutex_unlock(&game_board.numb_players_mutex);
+  if(!player->monster_eaten){
+  monster_x=player->monster_x;
+  monster_y=player->monster_y;
   pthread_mutex_lock(&game_board.line_lock[monster_x]);
   pthread_mutex_lock(&game_board.column_lock[monster_y]);
   game_board.array[monster_y][monster_x].figure_type=EMPTY;
@@ -839,6 +822,10 @@ void player_disconect(player_info* player){
   game_board.array[monster_y][monster_x].fruit=NULL;
   pthread_mutex_unlock(&game_board.line_lock[monster_x]);
   pthread_mutex_unlock(&game_board.column_lock[monster_y]);
+  }
+  if(!player->pacman_eaten){
+  pacman_x=player->pacman_x;
+  pacman_y=player->pacman_y;
   pthread_mutex_lock(&game_board.line_lock[pacman_x]);
   pthread_mutex_lock(&game_board.column_lock[pacman_y]);
   game_board.array[pacman_y][pacman_x].figure_type=EMPTY;
@@ -847,7 +834,7 @@ void player_disconect(player_info* player){
   game_board.array[pacman_y][pacman_x].fruit=NULL;
   pthread_mutex_unlock(&game_board.line_lock[pacman_x]);
   pthread_mutex_unlock(&game_board.column_lock[pacman_y]);
-  pthread_mutex_unlock(&(player->mutex));
+  }
   msg.type=EMPTY;
   msg.x=monster_x;
   msg.y=monster_y;
@@ -855,13 +842,14 @@ void player_disconect(player_info* player){
   msg.x=pacman_x;
   msg.y=pacman_y;
   *event_data2=msg;
+  player->exit=1;
+  pthread_mutex_unlock(&(player->mutex));
   pthread_mutex_lock(&(players->mutex));
   pthread_mutex_lock(&(fruits->mutex));
   removeNode_no_lock(players,player);
   fruit_score_player_disconnect(players,fruits);
   pthread_mutex_unlock(&(fruits->mutex));
   pthread_mutex_unlock(&(players->mutex));
-  player->exit=1;
   sem_post(&(player->sem_inact));
   sem_post(&(player->sem_monster_eaten));
   sem_post(&(player->sem_pacman_eaten));
@@ -1039,10 +1027,13 @@ void * playerThread(void * argv){
   pthread_t thread_id;
   sem_init(&(player->sem_inact),0,0);
   pthread_create(&thread_id,NULL,playerInactivity,(void*)player);
+  pthread_detach(thread_id);
   sem_init(&(player->sem_monster_eaten),0,0);
   pthread_create(&thread_id,NULL,monsterEaten,(void*)player);
+  pthread_detach(thread_id);
   sem_init(&(player->sem_pacman_eaten),0,0);
   pthread_create(&thread_id,NULL,pacmanEaten,(void*)player);
+  pthread_detach(thread_id);
 
   while((err_rcv = recv(client_sock_fd, &client_msg , sizeof(client_msg), 0))>0){
     if((time(NULL)-last_time)>=1){
@@ -1088,15 +1079,12 @@ void *serverThread(void * argc){
   player_info* new_player_info;
 
   sem_init(&(score.sem_score),0,0);
-  if(pthread_barrier_init(&score.barrier,NULL,2)!=0){
-        printf("\n score barrier init has failed\n");
-        exit(-1);
-  }
-  pthread_create(&thread_id,NULL,scoreThread,NULL);
+  pthread_create(&score.thread_id,NULL,scoreThread,NULL);
 
   while(1){
     //Server waits for a new client to connect
      new_client_fd = accept(server_socket,(struct sockaddr *)&client_addr,&size_addr);
+     if(new_client_fd==-1) break;
 
      pthread_mutex_lock(&game_board.numb_players_mutex);
      if((game_board.size_x*game_board.size_y-game_board.numb_bricks
@@ -1111,10 +1099,6 @@ void *serverThread(void * argc){
     game_board.numb_players++;
     pthread_mutex_unlock(&game_board.numb_players_mutex);
 
-     if(new_client_fd == -1){
-       perror("accept");
-       exit(EXIT_FAILURE);
-     }
      new_player_info=(player_info*)malloc(sizeof(player_info));
      new_player_info->client_fd=new_client_fd;
      new_player_info->exit=0;
@@ -1130,7 +1114,6 @@ void *serverThread(void * argc){
      add(players,(void*)new_player_info);
      //Create a new workThread
      pthread_create(&thread_id,NULL,playerThread,(void*)new_player_info);
-     sleep(2);
      pthread_detach(thread_id);
   }
   return (NULL);
@@ -1191,10 +1174,11 @@ void destroyFruit(void* _fruit){
 
 void free_game_memory_exit(){
   close_board_windows();
-  close(server_socket);
+  shutdown(server_socket,SHUT_RDWR);
   pthread_join(server.thread_id,NULL);
+  close(server_socket);
   sem_post(&score.sem_score);
-  pthread_barrier_wait(&score.barrier);
+  pthread_join(score.thread_id,NULL);
   if(players!=NULL)
     destroy(players,destroyPlayer);
   if(fruits!=NULL)
@@ -1223,7 +1207,6 @@ int main(int argc , char* argv[]){
 
   //do not abort program for broken pipe
   signal(SIGPIPE, SIG_IGN);
-  //signal(SIGINT,free_game_memory_exit);
 
   struct sockaddr_in server_local_addr;
 
@@ -1258,8 +1241,6 @@ int main(int argc , char* argv[]){
   }
 
   pthread_create(&server.thread_id, NULL, serverThread, NULL);
-  pthread_detach(server.thread_id);
-
 
   int x,y,figure_type,color;
 
