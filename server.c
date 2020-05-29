@@ -18,29 +18,50 @@
 
 //gcc server.c linked_list.c UI_library.c -o server -lSDL2 -lSDL2_image -lpthread -Wall -g
 
-Uint32 Event_ShowFigure;
-int server_socket;
-LinkedList* players;
-LinkedList *fruits;
-board game_board;
-score_info score;
-server_info server;
+/** GLOBAL VARIABLES **/
+Uint32 Event_ShowFigure; // Variable used by funtions from the SDL library to push a visual event
+int server_socket;       // Server file descriptor
+LinkedList *players;     // List of players connected to the server
+LinkedList *fruits;      // List of fruits (related to the number of players)
+board game_board;        // Structure with the information related to the game board and logic
+score_info score;        // Structure that contains the score, updated as the games goes on
+server_info server;      // Structure with the thread_id of the server Thread
 
 
-/*******************************************************************************/
-/*******                   LIST OPERATIONS                         *************/
-/*****************************************************************************/
-/*****************************************************************************/
-/*   THIS MODULE CONTAINS                                                    */
-/*    AUXILIARY FUNCTIONS TO OVERRIDE LIST OPERATIONS                       */
-/*    THAT ARE SPECIFIC TO THIS PROJECT,  SUCH AS TRASVERSE OR NODE REMOVAL*/
-/****************************************************************************/
 
+/**** LIST OPERATIONS *********************************************************/ //might change to list
+// THIS MODULE CONTAINS AUXILIARY FUNCTIONS TO OVERRIDE LIST OPERATIONS THAT
+// ARE SPECIFIC TO THIS PROJECT,  SUCH AS TRASVERSE OR NODE REMOVAL
+
+/**
+ * Name:               send_to_player
+ * Purpose:            Send a certain msg to the player (self-explanatory)
+ * Inputs:
+ *   Parameters:
+ *              (void) * data - pointer to the player information to get that players address
+ *              (void) * msg - message to send
+ *   Globals:          None
+ * Outputs:
+ *   Parameter:
+ *    (server_message) msg - message to sent
+ */
 void send_to_player(void* data , void *msg){
   player_info player = (*(player_info*)data);
-  send(player.client_fd,msg, sizeof(server_message), 0);
+  send(player.client_fd, msg, sizeof(server_message), 0);
 }
 
+/**
+ * Name:               send_to_player_2_messages
+ * Purpose:            Send a two certain messages to the player (self-explanatory)
+ * Inputs:
+ *   Parameters:
+ *              (void) * data - pointer to the player information to get that players address
+ *              (void) * msg - messages to send
+ *   Globals:          None
+ * Outputs:
+ *   Parameter:
+ *            (void *) msg_array - messages to sent
+ */
 void send_to_player_2_messages(void* data , void* msg){
   server_message* msg_array=(server_message*)msg;
   player_info player = (*(player_info*)data);
@@ -48,29 +69,74 @@ void send_to_player_2_messages(void* data , void* msg){
   send(player.client_fd,&msg_array[1], sizeof(server_message), 0);
 }
 
+/**
+ * Name:               send_to_players
+ * Purpose:            Send a certain message to every player on the player List
+ * Inputs:
+ *   Parameters:
+ *              (void) * msg - message to send
+ *   Globals:
+ *        (LinkedList) * players - list of connected players
+ * Outputs:
+ *   Parameter:
+ *              (void) msg - message to sent to each client/player
+ * Notes:              Syncronization is ensured be the trasverse function.
+ */
 void send_to_players(void *msg){
   trasverse(players,msg,send_to_player);
 }
 
+/**
+ * Name:               send_to_players_no_lock
+ * Purpose:            Send a certain message to every player on the player List
+ * Inputs:
+ *   Parameters:
+ *              (void) * msg - message to send
+ *   Globals:
+ *        (LinkedList) * players - list of connected players
+ * Outputs:
+ *   Parameter:
+ *              (void) msg - message to sent to each client/player
+ * Notes:              Syncronization isn't ensured.
+ */
 void send_to_players_no_lock(void *msg){
   trasverse_no_lock(players,msg,send_to_player);
 }
 
-
+/**
+ * Name:               send_to_players_2_messages
+ * Purpose:            Send two messages to every player on the player List
+ * Inputs:
+ *   Parameters:
+ *              (void) * msg - messages to send
+ *   Globals:
+ *        (LinkedList) * players - list of connected players
+ * Outputs:
+ *   Parameter:
+ *              (void) msg - messages to sent to each client/player
+ * Notes:              Syncronization is ensured be the trasverse function.
+ */
 void send_to_players_2_messages(void *msg){
   trasverse(players,msg,send_to_player_2_messages);
 }
 
-/********************************************************************/
-/********************************************************************/
-/*                      BOARD FUNCTIONS                             */
-/********************************************************************/
-/*********************************************************************/
-/* THIS MODULE IS RELATED TO LOADING BOARD,  DESTROYING BOARD AND   */
-/* BOARD LOGIC                                                       */
-/*********************************************************************/
-void load_board(char * file_name){
+/**** BOARD FUNCTIONS *********************************************************/
+// THIS MODULE IS RELATED TO LOADING, UPDATING, DESTROYING AND LOGIC OF THE BOARD
 
+/**
+ * Name:               load_board
+ * Purpose:            Initializes the game board according to the information of the file.
+ * Inputs:
+ *   Parameters:
+ *              (char) * file_name - path to file with the board size and brick placement.
+ *   Globals:
+ *             (board) game_board - strucure to initialize with the information of the file
+ * Outputs:
+ *   Parameter:
+ *             (board) game_board - updated gameboard
+ */
+void load_board(char * file_name){
+  // Auxiliary variables used to read and parse the file
   FILE *fptr;
   char line[1024];
 
@@ -86,23 +152,38 @@ void load_board(char * file_name){
     printf("Error reading file!");
     exit(-1);
   }
+  // The first line of the file contains the board size (width and lenght)
   if(sscanf(line,"%d %d",&game_board.size_x,&game_board.size_y)!=2){
     printf("Board file does not specify x and y dimensions\n!");
     exit(-1);
   }
 
+  // Allocation of the game board
   game_board.array=(board_square**)malloc(game_board.size_y*sizeof(board_square*));
+  if(game_board.array == NULL){
+    printf("Unable to allocate memory for the game board.");
+    exit(-1);
+  }
   for(int i=0;i<game_board.size_y;i++){
     game_board.array[i]=(board_square*)malloc(game_board.size_x*sizeof(board_square));
+    if(game_board.array[i] == NULL){
+      printf("Unable to allocate memory for the game board.");
+      exit(-1);
+    }
   }
 
+  // initialization of the number of players mutex,
+  // used to ensure syncronization when adding players to the board
   if (pthread_mutex_init(&game_board.numb_players_mutex, NULL) != 0) {
-        printf("\n board mutex for players init has failed\n");
-        exit(-1);
+    printf("\n board mutex for players init has failed\n");
+    exit(-1);
   }
+
+  // Initialization of variables used to check the number of available spaces
   game_board.numb_bricks=0;
   game_board.numb_players=0;
 
+  // Parse of the file and update of the game board
   for(int j =0;j<game_board.size_y;j++){
     if(fgets(line,1024,fptr)==NULL){
       printf("Error reading file!");
@@ -124,37 +205,68 @@ void load_board(char * file_name){
     }
   }
 
+  // Initialization of the line and column mutexes used to ensure syncronization
+  // across a line or collumn. [ref. ???]
   game_board.line_lock=(pthread_mutex_t*)malloc(game_board.size_x*sizeof(pthread_mutex_t));
+  if(game_board.line_lock == NULL){
+    printf("Unable to allocate memory for the game board line_lock mutex.");
+    exit(-1);
+  }
   game_board.column_lock=(pthread_mutex_t*)malloc(game_board.size_y*sizeof(pthread_mutex_t));
+  if(game_board.column_lock == NULL){
+    printf("Unable to allocate memory for the game board column_lock mutex.");
+    exit(-1);
+  }
   for(int i=0;i<game_board.size_x;i++){
     if (pthread_mutex_init(&game_board.line_lock[i], NULL) != 0) {
-          printf("\n board mutex init has failed\n");
-          exit(-1);
+      printf("\n board mutex init has failed\n");
+      exit(-1);
     }
   }
   for(int i=0;i<game_board.size_y;i++){
     if (pthread_mutex_init(&game_board.column_lock[i], NULL) != 0) {
-          printf("\n board mutex init has failed\n");
-          exit(-1);
+      printf("\n board mutex init has failed\n");
+      exit(-1);
     }
   }
 
 }
 
-server_message assignRandCoords(player_info* player,int figure_type,int init){
+/**
+ * Name:               assignRandCoords
+ * Purpose:            Assign random coordinates to non static board related
+ *                     entities: used for players pacman and monster
+ * Inputs:
+ *   Parameters:
+ *       (player_info) * player - player to assign random coordinates to its monster and pacman
+ *               (int) figure_type - figure type/ event type
+ *               (int) init - initialization flag, if the player isn't yet on the board
+ *   Globals:
+ *             (board) game_board - game board to update
+ * Outputs:
+ *   Parameter:
+ *             (board) game_board - updated gameboard
+ *   Return:
+ *        (server_msg) output - message to send to clients
+ * Notes:              Syncronization is ensured throught the column and line mutexes of the board
+ */
+server_message assignRandCoords(player_info* player, int figure_type, int init){
+  // Auxiliary variables
   int color,player_id;
+  int i,j;
 
   color=player->color;
   player_id=player->client_fd;
 
-  int i,j;
+  // While a EMPTY and different from the current one position isn't found
   while(1){
     j=rand()%game_board.size_y;
     i=rand()%game_board.size_x;
-    if(init||(i!=player->pacman_x&&i!=player->monster_x))
+    if(init||(i!=player->pacman_x && i!=player->monster_x))
       pthread_mutex_lock(&game_board.line_lock[i]);
-    if(init||(j!=player->pacman_y&&j!=player->monster_y))
+    if(init||(j!=player->pacman_y && j!=player->monster_y))
       pthread_mutex_lock(&game_board.column_lock[j]);
+    // An EMPTY position has been found
     if(game_board.array[j][i].figure_type==EMPTY){
       game_board.array[j][i].figure_type=figure_type;
       game_board.array[j][i].color=color;
@@ -175,12 +287,12 @@ server_message assignRandCoords(player_info* player,int figure_type,int init){
     player->monster_x=i;
     player->monster_y=j;
     player->monster_eaten=0;
-  }
-  else{
+  } else{
     player->pacman_x=i;
     player->pacman_y=j;
     player->pacman_eaten=0;
   }
+  // Message to send to clients
   server_message output;
   output.type=figure_type;
   output.x=i;
@@ -191,6 +303,10 @@ server_message assignRandCoords(player_info* player,int figure_type,int init){
   server_message *event_data;
   SDL_Event new_event;
   event_data = (server_message*)malloc(sizeof(server_message));
+  if(event_date == NULL){
+    printf("Unable to allocate memory assignRandCoords event_data.");
+    exit(-1);
+  }
   *event_data = output;
   SDL_zero(new_event);
   new_event.type = Event_ShowFigure;
