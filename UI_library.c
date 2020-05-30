@@ -226,6 +226,18 @@ void get_board_place(int mouse_x, int mouse_y, int * board_x, int *board_y){
 	*board_y = mouse_y / row_height;
 }
 
+/**
+ * Name:               rgb_360
+ * Purpose:            Simplified conversion between HSV and RGB color model.
+ * Inputs:
+ *   Parameter:
+ *               (int) angle - HSV hue angle
+ *               (int) *r,*g,*b - pointer to the RGB values to return.
+ * Outputs:
+ *   Parameter:
+ *               (int) *r,*g,*b - RGB color for the angle given
+ * Reference:          https://en.wikipedia.org/wiki/HSL_and_HSV
+ */
 void rgb_360(int angle, int *r,int *g,int *b){
   int sector = (angle%360)/60;
   double x, c, h;

@@ -180,7 +180,7 @@ void removeFirst(struct LinkedList *list,void (*data_operation)(void* data))
 	{
 		data_operation(list->root->data);
 		if (list->_size == 1){ //clear(list)
-    	free(list->root);
+      free(list->root);
       list->root = NULL;
       list->tail = NULL;
       list->_size = 0;
@@ -222,19 +222,34 @@ void removeFirst_no_lock(struct LinkedList *list,void (*data_operation)(void* da
 
 void destroy(struct LinkedList *list,void (*destroyDataFunc)(void* data))
 {
-	if(&list->mutex!=NULL)
-		pthread_mutex_destroy(&list->mutex);
+  if(&list->mutex!=NULL)
+    pthread_mutex_destroy(&list->mutex);
   Node * current = list->root;
   Node * next = current;
   while(current != NULL){
     next = current->next;
-		destroyDataFunc(current->data);
-		free(current);
+    destroyDataFunc(current->data);
+    free(current);
     current = next;
   }
   free(list);
 }
 
+/**
+ * Name:               trasverse
+ * Purpose:            Go throught the list, and make some operation given be
+ *                     the second argument, function.
+ * Inputs:
+ *   Parameters:
+ *      (LinkedList *) list - List to go throught
+ *              (void) (*function) - operation to make in each element of the list
+ *   Globals:          None
+ * Outputs:
+ *   Parameter:
+ *            (void *) msg_array - messages to sent
+ * Notes:              Due to the mutexes, syncronnization is ensured. This is
+ *                     important if the operation changes values on the list.
+ */
 void trasverse(LinkedList* list,void* msg ,void(*function)(void*,void*)){
 	pthread_mutex_lock(&list->mutex);
 
@@ -247,6 +262,21 @@ void trasverse(LinkedList* list,void* msg ,void(*function)(void*,void*)){
 	pthread_mutex_unlock(&list->mutex);
 }
 
+/**
+ * Name:               trasverse_no_lock
+ * Purpose:            Go throught the list, and make some operation given be
+ *                     the second argument, function.
+ * Inputs:
+ *   Parameters:
+ *      (LinkedList *) list - List to go throught
+ *              (void) (*function) - operation to make in each element of the list
+ *   Globals:          None
+ * Outputs:
+ *   Parameter:
+ *            (void *) msg_array - messages to sent
+ * Notes:              Syncronnization isn't ensured. This isn't a problem if
+ *                     the operation doesn't change values of the list.
+ */
 void trasverse_no_lock(LinkedList* list,void* msg ,void(*function)(void*,void*)){
 	Node * current = list->root;
 

@@ -32,7 +32,6 @@ player_info player;      // Strucure with the client/player information
  *   Globals:
  *       (player_info) player - initilized mutexes
  *   Return:           None
- * Notes:              *
  */
 void init_player(){
   if (pthread_mutex_init(&player.pacman_lock, NULL) != 0) {
