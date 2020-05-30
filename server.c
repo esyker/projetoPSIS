@@ -932,6 +932,7 @@ void fruit_new_player(LinkedList* players, LinkedList* fruits){
       printf("\nfruit mutex init has failed\n");
       exit(-1);
     }
+    fruit1->exit=0;
     sem_init(&(fruit1->sem_fruit),0,1);
     add_no_lock(fruits,fruit1);
     pthread_create(&fruit1->thread_id,NULL,fruitGenerator,(void*)fruit1);
@@ -941,6 +942,7 @@ void fruit_new_player(LinkedList* players, LinkedList* fruits){
       printf("\nfruit mutex init has failed\n");
       exit(-1);
     }
+    fruit2->exit=0;
     sem_init(&(fruit2->sem_fruit),0,1);
     add_no_lock(fruits,fruit2);
     pthread_create(&fruit2->thread_id,NULL,fruitGenerator,(void*)fruit2);
