@@ -17,8 +17,8 @@ struct LinkedList* constructList()
 {
 	struct LinkedList *temp = malloc(sizeof(struct LinkedList));
 	if (pthread_mutex_init(&temp->mutex, NULL) != 0) {
-			free(temp);
-			return NULL;
+		free(temp);
+		return NULL;
 	}
 	temp->root = NULL;
 	temp->tail = NULL;

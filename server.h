@@ -1,3 +1,6 @@
+#ifndef SERVER_H
+#define SERVER_H
+
 #include <pthread.h>
 #include <semaphore.h>
 
@@ -82,3 +85,5 @@ typedef struct board{
   int numb_players;
   pthread_mutex_t numb_players_mutex;
 }board;
+
+#endif /* SERVER_H */

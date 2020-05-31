@@ -1,13 +1,13 @@
+#ifndef LINKED_LIST_H
+#define LINKED_LIST_H
 #include <pthread.h>
 
-typedef struct Node
-{
+typedef struct Node{
 	void *data;
 	struct Node *next, *prev;
 }Node;
 
-typedef struct LinkedList
-{
+typedef struct LinkedList{
 	struct Node *root, *tail;
 	size_t _size;
 	pthread_mutex_t mutex;
@@ -27,3 +27,5 @@ void trasverse(LinkedList* list,void* msg ,void(*function)(void*,void*));
 void trasverse_no_lock(LinkedList* list,void* msg ,void(*function)(void*,void*));
 void* findby(LinkedList* list,int(*function)(void*,void*), void* condition);
 void custom_operation(LinkedList* list, void (*operation)(LinkedList* list));
+
+#endif /* LINKED_LIST_H */

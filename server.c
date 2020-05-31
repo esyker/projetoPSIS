@@ -16,8 +16,11 @@
 #include "UI_library.h"
 #include "linked_list.h"
 
-#define SCORE_T 10
-#define INACTIVITY_T 8
+#include "list_operations.h"
+#include "board_operations.h"
+#include "score_operations.h"
+#include "fruit_operations.h"
+#include "player_operations.h"
 
 //gcc server.c linked_list.c UI_library.c -o server -lSDL2 -lSDL2_image -lpthread -Wall -g
 
@@ -31,7 +34,7 @@ score_info score;        // Structure that contains the score, updated as the ga
 server_info server;      // Structure with the thread_id of the server Thread
 
 
-
+#if 0
 /**** LIST OPERATIONS *********************************************************/ //might change to list
 // THIS MODULE CONTAINS AUXILIARY FUNCTIONS TO OVERRIDE LIST OPERATIONS THAT
 // ARE SPECIFIC TO THIS PROJECT,  SUCH AS TRASVERSE OR NODE REMOVAL
@@ -122,7 +125,9 @@ void send_to_players_no_lock(void *msg){
 void send_to_players_2_messages(void *msg){
   trasverse(players,msg,send_to_player_2_messages);
 }
+#endif
 
+#if 0
 /**** BOARD FUNCTIONS *********************************************************/
 // THIS MODULE IS RELATED TO LOADING, UPDATING, DESTROYING AND LOGIC OF THE BOARD
 
@@ -700,7 +705,9 @@ server_message* validate_play_get_answer(client_message input, player_info* play
     return output;
   return NULL;
 }
+#endif
 
+#if 0
 /** SCORE FUNCTIONS ***********************************************************/
 
 /**
@@ -762,7 +769,9 @@ void* scoreThread(void* argv){
   }
   return NULL;
 }
+#endif
 
+#if 0
 /** FRUIT RELATED FUNCTIONS ***************************************************/
 
 /**
@@ -951,7 +960,9 @@ void fruit_new_player(LinkedList* players, LinkedList* fruits){
   pthread_mutex_unlock(&(fruits->mutex));
   pthread_mutex_unlock(&(players->mutex));
 }
+#endif
 
+#if 0
 /** PLAYER RELATED FUNCTIONS **************************************************/
 /**     FUNCTIONS USED FOR THREADS                                 */
 /*     SUCH AS PLAYER THREAD OR SERVER THREAD                      */
@@ -1372,9 +1383,10 @@ void *serverThread(void * argc){
   }
   return (NULL);
 }
+#endif
 
 /** MEMORY and EXIT HANDLING FUNCTIONS ****************************************/
-
+#if 0
 /**
  * Name:               destroyBoard
  * Purpose:            Free memory allocated for the game_board, and destroy
@@ -1447,6 +1459,7 @@ void destroyFruit(void* _fruit){
   fruit->exit=1;
   sem_post(&fruit->sem_fruit);
 }
+#endif
 
 void free_game_memory_exit(){
   close_board_windows();
