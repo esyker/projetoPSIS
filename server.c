@@ -37,13 +37,6 @@ void free_game_memory_exit(){
   close_board_windows();
   shutdown(server_socket,SHUT_RDWR);
   pthread_join(server.thread_id,NULL);
-  close(server_socket);
-  sem_post(&score.sem_score);
-  pthread_join(score.thread_id,NULL);
-  if(players!=NULL)
-    destroy(players,destroyPlayer);
-  if(fruits!=NULL)
-    destroy(fruits,destroyFruit);
   destroyBoard();
   printf("Memory freed and sockets closed!\nEND\n");
   exit(0);

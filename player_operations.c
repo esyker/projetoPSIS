@@ -71,14 +71,12 @@ void player_disconect(player_info* player){
   sem_post(&(player->sem_inact));
   sem_post(&(player->sem_monster_eaten));
   sem_post(&(player->sem_pacman_eaten));
-  printf("sending in player disconect\n");
   send_to_players(event_data1);
   send_to_players(event_data2);
   pthread_barrier_wait(&player->barrier);
   pthread_mutex_destroy(&(player->mutex));
   // Disconect player and deallocate memory related to the player.
   close(player->client_fd);
-  free(player);
   SDL_Event new_event;
   SDL_zero(new_event);
   new_event.type = Event_ShowFigure;
@@ -115,7 +113,6 @@ void * monsterEaten(void * argv){
       pthread_mutex_lock(&player->mutex);
       msg=assignRandCoords(player,MONSTER,NOT_INIT);
       pthread_mutex_unlock(&player->mutex);
-      printf("sending in monster eaten\n");
       send_to_players(&msg);
     }
   }
@@ -148,7 +145,6 @@ void * pacmanEaten(void * argv){
       pthread_mutex_lock(&player->mutex);
       msg=assignRandCoords(player,PACMAN,NOT_INIT);
       pthread_mutex_unlock(&player->mutex);
-      printf("sending in pacman eaten\n");
       send_to_players(&msg);
     }
   }
@@ -210,7 +206,6 @@ void * playerInactivity(void * argv){
         *event_data=msg1;
         new_event.user.data1 = event_data;
         SDL_PushEvent(&new_event);
-        printf("sending in inact\n");
         send_to_players(&msg1);
         msg2=assignRandCoords(player,current_figure,NOT_INIT);
         pthread_mutex_unlock(&(player->mutex));
@@ -291,7 +286,6 @@ void * playerThread(void * argv){
   // Initilize players characters on the board
   pthread_mutex_lock(&player->mutex);
   msg=assignRandCoords(player,MONSTER,INITIALIZATION);
-  printf("sending in playerThread");
   send_to_players(&msg);
   msg=assignRandCoords(player,PACMAN,INITIALIZATION);
   pthread_mutex_unlock(&player->mutex);
@@ -321,7 +315,6 @@ void * playerThread(void * argv){
     if(message_available>0){
       if((result=validate_play_get_answer(client_msg,player))!=NULL){
         // if the proposed move was valid
-        printf("sending in playerThread");
         send_to_players_2_messages(result);
         SDL_zero(new_event);
         new_event.type = Event_ShowFigure;
@@ -350,6 +343,7 @@ void * playerThread(void * argv){
     }
   }
   player_disconect(player);
+  free(player);
   return NULL;
 }
 
@@ -419,8 +413,14 @@ void *serverThread(void * argv){
     add(players,(void*)new_player_info);
     //Create a new workThread, which will recieve the players messages
     pthread_create(&new_player_info->playerThread_id,NULL,playerThread,(void*)new_player_info);
-    pthread_detach(new_player_info->playerThread_id);
   }
+  sem_post(&score.sem_score);
+  pthread_join(score.thread_id,NULL);
+  if(players!=NULL)
+    destroy(players,destroyPlayer);
+  if(fruits!=NULL)
+    destroy(fruits,removeFruitData);
+  close(server_socket);
   return (NULL);
 }
 
@@ -436,5 +436,5 @@ void *serverThread(void * argv){
 void destroyPlayer(void* _player){
   player_info* player= (player_info*)_player;
   shutdown(player->client_fd,SHUT_RDWR);
-  //pthread_join(player->playerThread_id,NULL);
+  pthread_join(player->playerThread_id,NULL);
 }

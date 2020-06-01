@@ -66,6 +66,8 @@ typedef struct score_info{
 
 typedef struct server_info{
   pthread_t thread_id;
+  pthread_barrier_t players_exit_barrier;
+  pthread_barrier_t fruits_exit_barrier;
 }server_info;
 
 typedef struct board_square{

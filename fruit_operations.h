@@ -19,6 +19,4 @@ void fruit_score_player_disconnect(LinkedList* players, LinkedList* fruits);
 void * fruitGenerator(void * argv);
 void fruit_new_player(LinkedList* players, LinkedList* fruits);
 
-void destroyFruit(void* _fruit);
-
 #endif /* FRUIT_OPERATIONS_H */

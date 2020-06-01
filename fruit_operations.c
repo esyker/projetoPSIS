@@ -189,17 +189,3 @@ void fruit_new_player(LinkedList* players, LinkedList* fruits){
   pthread_mutex_unlock(&(fruits->mutex));
   pthread_mutex_unlock(&(players->mutex));
 }
-
-/**
- * Name:               destroyFruit
- * Purpose:            Mark fruit for removal.
- * Inputs:
- *   Global:
- *             (void) * _fruit - pointer to struture related to the fruit.
- * Outputs:            None
- */
-void destroyFruit(void* _fruit){
-  fruit_info* fruit= (fruit_info*)_fruit;
-  fruit->exit=1;
-  sem_post(&fruit->sem_fruit);
-}
