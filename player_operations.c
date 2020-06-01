@@ -343,7 +343,7 @@ void * playerThread(void * argv){
       }
     }
   }
-  player_disconect(player);
+  if(!player->program_exit) player_disconect(player);
   return NULL;
 }
 
@@ -404,6 +404,7 @@ void *serverThread(void * argv){
     new_player_info->client_fd=new_client_fd;
     new_player_info->exit=0;
     new_player_info->score=0;
+    new_player_info->program_exit=0;
     if (pthread_mutex_init(&(new_player_info->mutex), NULL) != 0) {
       printf("\n player mutex init has failed\n");
       exit(-1);
@@ -414,7 +415,7 @@ void *serverThread(void * argv){
     }
     add(players,(void*)new_player_info);
     //Create a new workThread, which will recieve the players messages
-    pthread_create(&thread_id,NULL,playerThread,(void*)new_player_info);
+    pthread_create(&new_player_info->playerThread_id,NULL,playerThread,(void*)new_player_info);
     pthread_detach(thread_id);
   }
   return (NULL);
@@ -431,8 +432,11 @@ void *serverThread(void * argv){
  */
 void destroyPlayer(void* _player){
   player_info* player= (player_info*)_player;
-  pthread_mutex_destroy(&(player->mutex));
+  player->program_exit=1;
+  shutdown(player->client_fd,SHUT_RDWR);
   close(player->client_fd);
+  pthread_join(player->playerThread_id,NULL);
+  pthread_mutex_destroy(&(player->mutex));
   player->exit=1;
   sem_post(&(player->sem_monster_eaten));
   sem_post(&(player->sem_pacman_eaten));

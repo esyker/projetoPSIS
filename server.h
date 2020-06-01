@@ -42,8 +42,10 @@ typedef struct player_info{
   sem_t sem_pacman_eaten;
   int pacman_eaten;//0 if false 1 if true
   int score;
+  pthread_t playerThread_id;
   pthread_barrier_t barrier;
   int exit;//player thread exits
+  int program_exit;
 }player_info;
 
 typedef struct fruit_info{
