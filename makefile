@@ -1,6 +1,6 @@
 CC = gcc
 # CFLAGS =
-LIBS = -lSDL2 -lSDL2_image -lpthread -lm
+LIBS = -lSDL2 -lSDL2_image -lpthread -lm -Wall
 
 SERVER_DEPS = linked_list.c UI_library.c list_operations.c board_operations.c score_operations.c fruit_operations.c player_operations.c
 

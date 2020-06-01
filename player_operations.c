@@ -371,8 +371,6 @@ void *serverThread(void * argv){
   players=constructList();
   fruits=constructList();
 
-  pthread_t thread_id;
-
   int new_client_fd=0;
   player_info* new_player_info;
 
@@ -416,7 +414,6 @@ void *serverThread(void * argv){
     add(players,(void*)new_player_info);
     //Create a new workThread, which will recieve the players messages
     pthread_create(&new_player_info->playerThread_id,NULL,playerThread,(void*)new_player_info);
-    pthread_detach(thread_id);
   }
   return (NULL);
 }
