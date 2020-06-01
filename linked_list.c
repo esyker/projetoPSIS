@@ -222,16 +222,20 @@ void removeFirst_no_lock(struct LinkedList *list,void (*data_operation)(void* da
 
 void destroy(struct LinkedList *list,void (*destroyDataFunc)(void* data))
 {
-  if(&list->mutex!=NULL)
-    pthread_mutex_destroy(&list->mutex);
-  Node * current = list->root;
+	Node * current = list->root;
   Node * next = current;
   while(current != NULL){
     next = current->next;
     destroyDataFunc(current->data);
+    current = next;
+  }
+	while(current != NULL){
+    next = current->next;
     free(current);
     current = next;
   }
+	if(&list->mutex!=NULL)
+		pthread_mutex_destroy(&list->mutex);
   free(list);
 }
 
