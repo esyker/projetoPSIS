@@ -445,7 +445,6 @@ void *serverThread(void * argv){
 void destroyPlayer(void* _player){
   player_info* player= (player_info*)_player;
   pthread_mutex_lock(&player->mutex);
-  printf("hey\n");
   player->exit=1;
   pthread_cancel(player->playerThread_id);
   pthread_mutex_unlock(&player->mutex);
