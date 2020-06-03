@@ -224,6 +224,7 @@ void destroy(struct LinkedList *list,void (*destroyDataFunc)(void* data))
 {
 	Node * current = list->root;
   Node * next = current;
+	pthread_mutex_lock(&list->mutex);
   while(current != NULL){
     next = current->next;
     destroyDataFunc(current->data);
@@ -234,6 +235,7 @@ void destroy(struct LinkedList *list,void (*destroyDataFunc)(void* data))
     free(current);
     current = next;
   }
+	pthread_mutex_unlock(&list->mutex);
 	if(&list->mutex!=NULL)
 		pthread_mutex_destroy(&list->mutex);
   free(list);

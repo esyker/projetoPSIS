@@ -413,13 +413,14 @@ void *serverThread(void * argv){
     add(players,(void*)new_player_info);
     //Create a new workThread, which will recieve the players messages
     pthread_create(&new_player_info->playerThread_id,NULL,playerThread,(void*)new_player_info);
+    pthread_detach(new_player_info->playerThread_id);
   }
   sem_post(&score.sem_score);
   pthread_join(score.thread_id,NULL);
-  if(players!=NULL)
-    destroy(players,destroyPlayer);
   if(fruits!=NULL)
     destroy(fruits,removeFruitData);
+  if(players!=NULL)
+    destroy(players,destroyPlayer);
   close(server_socket);
   return (NULL);
 }
@@ -435,6 +436,15 @@ void *serverThread(void * argv){
  */
 void destroyPlayer(void* _player){
   player_info* player= (player_info*)_player;
-  shutdown(player->client_fd,SHUT_RDWR);
-  pthread_join(player->playerThread_id,NULL);
+  pthread_mutex_lock(&player->mutex);
+  player->exit=1;
+  pthread_cancel(player->playerThread_id);
+  pthread_mutex_unlock(&player->mutex);
+  sem_post(&(player->sem_inact));
+  sem_post(&(player->sem_monster_eaten));
+  sem_post(&(player->sem_pacman_eaten));
+  pthread_barrier_wait(&player->barrier);
+  pthread_mutex_destroy(&(player->mutex));
+  close(player->client_fd);
+  free(player);
 }
