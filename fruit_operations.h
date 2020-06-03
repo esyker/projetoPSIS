@@ -1,7 +1,7 @@
 #ifndef FRUIT_OPERATIONS_H
 #define FRUIT_OPERATIONS_H
 
-#define FRUIT_T 5
+#define FRUIT_T 2
 
 #include <stdio.h>
 #include <stdlib.h>

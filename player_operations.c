@@ -120,7 +120,6 @@ void * monsterEaten(void * argv){
       }
       pthread_mutex_lock(&player->mutex);
       msg=assignRandCoords(player,MONSTER,NOT_INIT);
-      sleep(5);
       pthread_mutex_unlock(&player->mutex);
       send_to_players(&msg);
     }
