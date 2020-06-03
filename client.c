@@ -108,6 +108,10 @@ void *clientThread(void *arg){
     }
 
     event_data = (server_message*)malloc(sizeof(server_message));
+    if(event_data == NULL){
+      printf("Unable to allocate memory for server message.");
+      exit(-1);
+    }
     *event_data = msg;
     SDL_zero(new_event);
     new_event.type = Event_ShowFigure;

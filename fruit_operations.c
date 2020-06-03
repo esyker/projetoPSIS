@@ -12,12 +12,26 @@
  *   Param:
  *   (server_message) * msg - message with score of the player to send to all clients
  */
-void removeFruitData(void* _fruit){
+ void removeFruitData(void* _fruit){
+   fruit_info* fruit=(fruit_info*)_fruit;
+   pthread_mutex_lock(&fruit->mutex);
+   fruit->exit=1;
+   pthread_mutex_unlock(&fruit->mutex);
+   sem_post(&(fruit->sem_fruit));
+ }
+
+
+
+
+void destroyFruit(void* _fruit){
   fruit_info* fruit=(fruit_info*)_fruit;
   pthread_mutex_lock(&fruit->mutex);
-  fruit->exit=1;
+  //fruit->exit=1;
+  pthread_cancel(fruit->thread_id);
   pthread_mutex_unlock(&fruit->mutex);
-  sem_post(&(fruit->sem_fruit));
+  pthread_mutex_destroy(&fruit->mutex);
+  sem_destroy(&fruit->sem_fruit);
+  free(fruit);
 }
 
 /**
@@ -68,8 +82,8 @@ void * fruitGenerator(void * argv){
     if(sem_wait(&(fruit->sem_fruit))==0){
       if((fruit->exit)==1){
         // if fruit is marked for removal
-        sem_destroy(&fruit->sem_fruit);
         pthread_mutex_lock(&fruit->mutex);
+        sem_destroy(&fruit->sem_fruit);
         if(!fruit->eaten){//assure fruit is in the board in this moment (isn't eaten)
           fruit_eaten = fruit->eaten;
           pthread_mutex_lock(&game_board.line_lock[fruit->x]);
@@ -102,10 +116,11 @@ void * fruitGenerator(void * argv){
         }
         break;
       }
+      pthread_mutex_lock(&fruit->mutex);
+
       if(!firstime) sleep(FRUIT_T);
       else firstime=0;
 
-      pthread_mutex_lock(&fruit->mutex);
       fruit->type=(rand()%2)+4;// 4 or 5 (CHERRY or LEMON)
       while(1){
         j=rand()%game_board.size_y;
@@ -166,6 +181,10 @@ void fruit_new_player(LinkedList* players, LinkedList* fruits){
   }
   else if((players->_size)>1){//remove two fruit threads fromm the fruit list
     fruit_info * fruit1=(fruit_info*)malloc(sizeof(fruit_info));
+    if(fruit1 == NULL){
+      printf("Unable to allocate memory for fruit1.");
+      exit(-1);
+    }
     if (pthread_mutex_init(&(fruit1->mutex), NULL) != 0) {
       printf("\nfruit mutex init has failed\n");
       exit(-1);
@@ -176,6 +195,10 @@ void fruit_new_player(LinkedList* players, LinkedList* fruits){
     pthread_create(&fruit1->thread_id,NULL,fruitGenerator,(void*)fruit1);
     pthread_detach(fruit1->thread_id);
     fruit_info * fruit2=(fruit_info*)malloc(sizeof(fruit_info));
+    if(fruit2 == NULL){
+      printf("Unable to allocate memory for fruit2.");
+      exit(-1);
+    }
     if (pthread_mutex_init(&(fruit2->mutex), NULL) != 0) {
       printf("\nfruit mutex init has failed\n");
       exit(-1);

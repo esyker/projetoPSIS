@@ -19,7 +19,15 @@
 void player_disconect(player_info* player){
   server_message* event_data1, *event_data2; // messages to remove the player from the other clients windows
   event_data1=(server_message*)malloc(sizeof(server_message));
+  if(event_data1 == NULL){
+    printf("Unable to allocate memory in player_disconect.");
+    exit(-1);
+  }
   event_data2=(server_message*)malloc(sizeof(server_message));
+  if(event_data2 == NULL){
+    printf("Unable to allocate memory in player_disconect.");
+    exit(-1);
+  }
   server_message msg;
 
   // Clear spaces occupied by the player that disconected
@@ -112,6 +120,7 @@ void * monsterEaten(void * argv){
       }
       pthread_mutex_lock(&player->mutex);
       msg=assignRandCoords(player,MONSTER,NOT_INIT);
+      sleep(5);
       pthread_mutex_unlock(&player->mutex);
       send_to_players(&msg);
     }
@@ -418,7 +427,7 @@ void *serverThread(void * argv){
   sem_post(&score.sem_score);
   pthread_join(score.thread_id,NULL);
   if(fruits!=NULL)
-    destroy(fruits,removeFruitData);
+    destroy(fruits,destroyFruit);
   if(players!=NULL)
     destroy(players,destroyPlayer);
   close(server_socket);
@@ -437,6 +446,7 @@ void *serverThread(void * argv){
 void destroyPlayer(void* _player){
   player_info* player= (player_info*)_player;
   pthread_mutex_lock(&player->mutex);
+  printf("hey\n");
   player->exit=1;
   pthread_cancel(player->playerThread_id);
   pthread_mutex_unlock(&player->mutex);

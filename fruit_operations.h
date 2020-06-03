@@ -1,7 +1,7 @@
 #ifndef FRUIT_OPERATIONS_H
 #define FRUIT_OPERATIONS_H
 
-#define FRUIT_T 2
+#define FRUIT_T 5
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +16,7 @@ extern board game_board;
 extern Uint32 Event_ShowFigure;
 
 void removeFruitData(void* _fruit);
+void destroyFruit(void* _fruit);
 void fruit_score_player_disconnect(LinkedList* players, LinkedList* fruits);
 void * fruitGenerator(void * argv);
 void fruit_new_player(LinkedList* players, LinkedList* fruits);

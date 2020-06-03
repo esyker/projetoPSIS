@@ -6,6 +6,10 @@
 struct Node* constructNode(void *data)
 {
 	struct Node *temp = malloc(sizeof(struct Node));
+	if(temp == NULL){
+		printf("Unable to allocate memory in ConstrutNode.");
+		exit(-1);
+	}
 	temp->data = data;
 	temp->prev = NULL;
 	temp->next = NULL;
@@ -16,6 +20,10 @@ struct Node* constructNode(void *data)
 struct LinkedList* constructList()
 {
 	struct LinkedList *temp = malloc(sizeof(struct LinkedList));
+	if(temp == NULL){
+		printf("Unable to allocate memory in ConstructList.");
+		exit(-1);
+	}
 	if (pthread_mutex_init(&temp->mutex, NULL) != 0) {
 		free(temp);
 		return NULL;
