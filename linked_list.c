@@ -83,30 +83,6 @@ int add_no_lock(struct LinkedList *list, void *data)
 	return size;
 }
 
-void freeNode(Node* node){
-	free(node->data);
-	node->data=NULL;
-	free(node);
-}
-
-// Clear the LinkedList of Nodes.
-// O(n) complexity.
-void clear(struct LinkedList *list)
-{
-	pthread_mutex_lock(&list->mutex);
-  Node * current = list->root;
-  Node * next = current;
-  while(current != NULL){
-    next = current->next;
-		freeNode(current);
-    current = next;
-  }
-  list->root = NULL;
-	list->tail = NULL;
-	list->_size = 0;
-	pthread_mutex_unlock(&list->mutex);
-}
-
 // Remove's the first Node whose data matches the parameter, if it exists.
 int removeNode(struct LinkedList *list, void *data)
 {

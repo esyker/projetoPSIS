@@ -4,7 +4,7 @@
 
 /**
  * Name:               removeFruitData
- * Purpose:            Remove fruits from the board. Used when a player quits.
+ * Purpose:            Remove a fruit from the board. Used when a player quits.
  * Inputs:
  *   Param:
  *             (void) * _fruit - Pointer to fruit list member to mark from removal.
@@ -21,8 +21,16 @@
  }
 
 
-
-
+ /**
+  * Name:               removeFruitData
+  * Purpose:            Remove fruits from the board. Used when program exits.
+  * Inputs:
+  *   Param:
+  *             (void) * _fruit - Pointer to fruit list member to mark from removal.
+  * Outputs:
+  *   Param:
+  *   (server_message) * msg - message with score of the player to send to all clients
+  */
 void destroyFruit(void* _fruit){
   fruit_info* fruit=(fruit_info*)_fruit;
   pthread_mutex_lock(&fruit->mutex);
@@ -46,6 +54,7 @@ void destroyFruit(void* _fruit){
  *       (LinkedList) * fruits - affected/updated lists
  */
 void fruit_score_player_disconnect(LinkedList* players, LinkedList* fruits){
+  //the list isn't locked here because we lock it in the playerThread when he exits
   removeFirst_no_lock(fruits,removeFruitData);
   removeFirst_no_lock(fruits,removeFruitData);
   if(players->_size==1){
@@ -162,7 +171,7 @@ void * fruitGenerator(void * argv){
 
 /**
  * Name:               fruit_new_player
- * Purpose:            Add fruits to the game, once a new player/client joins.
+ * Purpose:            Add fruits to the game when a new player/client joins.
  * Inputs:
  *   Param:
  *       (LinkedList) * players, * fruits - Lists to update
@@ -178,7 +187,7 @@ void fruit_new_player(LinkedList* players, LinkedList* fruits){
     pthread_mutex_unlock(&(players->mutex));
     return;
   }
-  else if((players->_size)>1){//remove two fruit threads fromm the fruit list
+  else if((players->_size)>1){//add two fruits and threads to the fruit list
     fruit_info * fruit1=(fruit_info*)malloc(sizeof(fruit_info));
     if(fruit1 == NULL){
       printf("Unable to allocate memory for fruit1.");

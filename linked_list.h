@@ -17,7 +17,6 @@ struct Node* constructNode(void *data);
 struct LinkedList* constructList();
 int add(struct LinkedList *list, void *data);
 int add_no_lock(struct LinkedList *list, void *data);
-void clear(struct LinkedList *list);
 int removeNode(struct LinkedList *list, void *data);
 int removeNode_no_lock(struct LinkedList *list, void *data);
 void removeFirst(struct LinkedList *list,void (*data_operation)(void* data));

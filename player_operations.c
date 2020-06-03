@@ -276,9 +276,9 @@ void * playerThread(void * argv){
   send(client_sock_fd, &msg, sizeof(msg), 0);
 
   if((err_rcv = recv(client_sock_fd, &my_color,sizeof(int), 0)) > 0 ){
-    if(my_color<0||my_color>360){
+    if(my_color<0||my_color>360){//invalid color
       close(client_sock_fd);
-      return NULL; //exit?
+      return NULL;
     }
   }
 

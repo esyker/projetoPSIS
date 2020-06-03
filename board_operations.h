@@ -8,7 +8,6 @@
 #include "server.h"
 #include "linked_list.h"
 
-//extern LinkedList *players;
 extern board game_board;
 extern Uint32 Event_ShowFigure;
 
