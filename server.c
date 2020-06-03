@@ -1,17 +1,3 @@
-#include <SDL2/SDL.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <pthread.h>
-#include <stdlib.h>
-#include <time.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <string.h>
-#include <semaphore.h>
-#include <errno.h>
-#include <signal.h>
-
 #include "server.h"
 #include "UI_library.h"
 #include "linked_list.h"
@@ -21,8 +7,6 @@
 #include "score_operations.h"
 #include "fruit_operations.h"
 #include "player_operations.h"
-
-//gcc server.c linked_list.c UI_library.c -o server -lSDL2 -lSDL2_image -lpthread -Wall -g
 
 /** GLOBAL VARIABLES **/
 Uint32 Event_ShowFigure; // Variable used by funtions from the SDL library to push a visual event

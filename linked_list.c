@@ -243,7 +243,7 @@ void destroy(struct LinkedList *list,void (*destroyDataFunc)(void* data))
 
 /**
  * Name:               trasverse
- * Purpose:            Go throught the list, and make some operation given be
+ * Purpose:            Go through the list, and make some operation given be
  *                     the second argument, function.
  * Inputs:
  *   Parameters:
@@ -270,7 +270,7 @@ void trasverse(LinkedList* list,void* msg ,void(*function)(void*,void*)){
 
 /**
  * Name:               trasverse_no_lock
- * Purpose:            Go throught the list, and make some operation given be
+ * Purpose:            Go through the list, and make some operation given be
  *                     the second argument, function.
  * Inputs:
  *   Parameters:

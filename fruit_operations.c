@@ -102,7 +102,7 @@ void * fruitGenerator(void * argv){
         }
         break;
       }
-      if(!firstime) sleep(2);
+      if(!firstime) sleep(FRUIT_T);
       else firstime=0;
 
       pthread_mutex_lock(&fruit->mutex);

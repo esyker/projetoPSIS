@@ -1,7 +1,7 @@
 #ifndef PLAYER_OPERATIONS_H
 #define PLAYER_OPERATIONS_H
 
-#define INACTIVITY_T 8
+#define INACTIVITY_T 30
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,7 +10,6 @@
 #include <netinet/in.h>
 #include <SDL2/SDL.h>
 
-//#include "server.h"
 #include "linked_list.h"
 #include "list_operations.h"
 #include "fruit_operations.h"

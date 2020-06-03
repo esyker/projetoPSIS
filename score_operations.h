@@ -9,7 +9,7 @@
 #include "linked_list.h"
 #include "list_operations.h"
 
-#define SCORE_T 10
+#define SCORE_T 60
 
 extern LinkedList *players;
 extern score_info score;

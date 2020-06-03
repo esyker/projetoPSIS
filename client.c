@@ -8,9 +8,6 @@
 #include "client.h"
 #include "UI_library.h"
 
-/* REMOVER */
-//gcc ex.c UI_library.c -o ex -lSDL2 -lSDL2_image -lpthread
-
 /** GLOBAL VARIABLES **/
 Uint32 Event_ShowFigure; // Variable used by funtions from the SDL library to push a visual event
 int sock_fd;             // File descriptor, used to communicate with the server
