@@ -115,10 +115,11 @@ void * monsterEaten(void * argv){
 
   while(1){
     if(sem_wait(&(player->sem_monster_eaten))==0){
+      pthread_mutex_lock(&player->mutex);
       if((player->exit)==1){//player exits
+        pthread_mutex_unlock(&player->mutex);
         break;
       }
-      pthread_mutex_lock(&player->mutex);
       msg=assignRandCoords(player,MONSTER,NOT_INIT);
       pthread_mutex_unlock(&player->mutex);
       send_to_players(&msg);
@@ -147,7 +148,9 @@ void * pacmanEaten(void * argv){
 
   while(1){
     if(sem_wait(&(player->sem_pacman_eaten))==0){
+      pthread_mutex_lock(&player->mutex);
       if((player->exit)==1){//player exits
+        pthread_mutex_unlock(&player->mutex);
         break;
       }
       pthread_mutex_lock(&player->mutex);
@@ -187,11 +190,11 @@ void * playerInactivity(void * argv){
 
   while(1){
     if(sem_timedwait(&(player->sem_inact),&timeout)==-1){
+      pthread_mutex_lock(&(player->mutex));
       if(errno==ETIMEDOUT){
         SDL_zero(new_event);
         new_event.type = Event_ShowFigure;
         //lock_player_mutex(player,0);
-        pthread_mutex_lock(&(player->mutex));
         pacman_x=player->pacman_x;
         pacman_y=player->pacman_y;
         msg1.type=EMPTY;
@@ -216,16 +219,18 @@ void * playerInactivity(void * argv){
         SDL_PushEvent(&new_event);
         send_to_players(&msg1);
         msg2=assignRandCoords(player,current_figure,NOT_INIT);
+        timeout.tv_sec=time(NULL)+INACTIVITY_T;
         pthread_mutex_unlock(&(player->mutex));
         send_to_players(&msg2);
-        timeout.tv_sec=time(NULL)+INACTIVITY_T;
       }
     }
     else{
       if((player->exit)==1){//player exits
+        pthread_mutex_unlock(&(player->mutex));
         break;
       }
       timeout.tv_sec=time(NULL)+INACTIVITY_T;
+      pthread_mutex_unlock(&(player->mutex));
     }
   }
 

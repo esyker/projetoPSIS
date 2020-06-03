@@ -26,7 +26,6 @@
 void destroyFruit(void* _fruit){
   fruit_info* fruit=(fruit_info*)_fruit;
   pthread_mutex_lock(&fruit->mutex);
-  //fruit->exit=1;
   pthread_cancel(fruit->thread_id);
   pthread_mutex_unlock(&fruit->mutex);
   pthread_mutex_destroy(&fruit->mutex);
