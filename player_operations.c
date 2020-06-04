@@ -153,7 +153,6 @@ void * pacmanEaten(void * argv){
         pthread_mutex_unlock(&player->mutex);
         break;
       }
-      pthread_mutex_lock(&player->mutex);
       msg=assignRandCoords(player,PACMAN,NOT_INIT);
       pthread_mutex_unlock(&player->mutex);
       send_to_players(&msg);
@@ -360,83 +359,6 @@ void * playerThread(void * argv){
   return NULL;
 }
 
-/**
- * Name:               serverThread
- * Purpose:            Thread which initializes the connections for the game to
- *                     start, initializes the requires structures for the game
- *                     and starts threads for each player that connects to the
- *                     server, to read each clients/player messages.
- * Inputs:
- *   Param:
- *             (void) * argv - pointer to the player which messages this thread will recive //WRONG
- * Outputs:
- *   Param:
- *       (LinkedList) * players - affected/updated list
- *   (server_message) msg - messages to send to player
- * Note:
- */
-void *serverThread(void * argv){
-  // Auxiliary variables
-  server_message msg;
-  struct sockaddr_in client_addr;
-  socklen_t size_addr = sizeof(client_addr);
-
-  players=constructList();
-  fruits=constructList();
-
-  int new_client_fd=0;
-  player_info* new_player_info;
-
-  sem_init(&(score.sem_score),0,0);
-  pthread_create(&score.thread_id,NULL,scoreThread,NULL);
-
-  while(1){
-    //Server waits for a new client to connect
-    new_client_fd = accept(server_socket,(struct sockaddr *)&client_addr,&size_addr);
-    if(new_client_fd==-1) break;
-
-    pthread_mutex_lock(&game_board.numb_players_mutex);
-    if((game_board.size_x*game_board.size_y-game_board.numb_bricks
-      - (game_board.numb_players-1)*2 - (game_board.numb_players*2))<4){
-      // No more avalible spaces
-      msg.type=BOARD_FULL;
-      send(new_client_fd,&msg, sizeof(server_message), 0);
-      close(new_client_fd);
-      pthread_mutex_unlock(&game_board.numb_players_mutex);
-      continue;
-    }
-    game_board.numb_players++;
-    pthread_mutex_unlock(&game_board.numb_players_mutex);
-    new_player_info=(player_info*)malloc(sizeof(player_info));
-    if(new_player_info == NULL){
-      printf("Unable to allocate memory for the new player.");
-      exit(-1);
-    }
-    new_player_info->client_fd=new_client_fd;
-    new_player_info->exit=0;
-    new_player_info->score=0;
-    if (pthread_mutex_init(&(new_player_info->mutex), NULL) != 0) {
-      printf("\n player mutex init has failed\n");
-      exit(-1);
-    }
-    if(pthread_barrier_init(&new_player_info->barrier,NULL,4)!=0){
-      printf("\n player barrier init has failed\n");
-      exit(-1);
-    }
-    add(players,(void*)new_player_info);
-    //Create a new workThread, which will recieve the players messages
-    pthread_create(&new_player_info->playerThread_id,NULL,playerThread,(void*)new_player_info);
-    pthread_detach(new_player_info->playerThread_id);
-  }
-  sem_post(&score.sem_score);
-  pthread_join(score.thread_id,NULL);
-  if(fruits!=NULL)
-    destroy(fruits,destroyFruit);
-  if(players!=NULL)
-    destroy(players,destroyPlayer);
-  close(server_socket);
-  return (NULL);
-}
 
 /**
  * Name:               destroyPlayer
